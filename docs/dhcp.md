@@ -13,6 +13,7 @@ Complete guide for configuring various DHCP servers to work with Bootimus for PX
 - [OPNsense](#opnsense)
 - [Windows Server DHCP](#windows-server-dhcp)
 - [Troubleshooting](#troubleshooting)
+- [PiHole](#pi-hole-dnsmasq)
 
 ## Overview
 
