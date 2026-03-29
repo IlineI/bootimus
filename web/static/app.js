@@ -208,6 +208,7 @@ function setupTabs() {
             }
             if (tab.dataset.tab === 'settings') {
                 loadTheme();
+                loadUSBImages();
             }
         });
     });
@@ -1140,20 +1141,7 @@ async function loadTheme() {
         const res = await fetch(`${API_BASE}/theme`);
         const data = await res.json();
         if (data.success) {
-            const t = data.data;
-            document.getElementById('theme-title').value = t.title || '';
-            document.getElementById('theme-console-width').value = t.console_width || 1920;
-            document.getElementById('theme-console-height').value = t.console_height || 1080;
-            document.getElementById('theme-text-fg').value = t.text_foreground || '#cccccc';
-            document.getElementById('theme-text-bg').value = t.text_background || '#000000';
-            document.getElementById('theme-disabled-fg').value = t.disabled_foreground || '#555555';
-            document.getElementById('theme-disabled-bg').value = t.disabled_background || '#000000';
-            document.getElementById('theme-highlight-fg').value = t.highlight_foreground || '#ffffff';
-            document.getElementById('theme-highlight-bg').value = t.highlight_background || '#0000aa';
-            document.getElementById('theme-separator-fg').value = t.separator_foreground || '#555555';
-            document.getElementById('theme-separator-bg').value = t.separator_background || '#000000';
-            document.getElementById('theme-title-fg').value = t.title_foreground || '#ffffff';
-            document.getElementById('theme-title-bg').value = t.title_background || '#0000aa';
+            document.getElementById('theme-title').value = data.data.title || '';
         }
     } catch (err) {
         console.error('Failed to load theme:', err);
@@ -1164,18 +1152,6 @@ async function saveTheme(e) {
     e.preventDefault();
     const theme = {
         title: document.getElementById('theme-title').value,
-        console_width: parseInt(document.getElementById('theme-console-width').value) || 1920,
-        console_height: parseInt(document.getElementById('theme-console-height').value) || 1080,
-        text_foreground: document.getElementById('theme-text-fg').value,
-        text_background: document.getElementById('theme-text-bg').value,
-        disabled_foreground: document.getElementById('theme-disabled-fg').value,
-        disabled_background: document.getElementById('theme-disabled-bg').value,
-        highlight_foreground: document.getElementById('theme-highlight-fg').value,
-        highlight_background: document.getElementById('theme-highlight-bg').value,
-        separator_foreground: document.getElementById('theme-separator-fg').value,
-        separator_background: document.getElementById('theme-separator-bg').value,
-        title_foreground: document.getElementById('theme-title-fg').value,
-        title_background: document.getElementById('theme-title-bg').value,
     };
     try {
         const res = await fetch(`${API_BASE}/theme`, {
@@ -1194,20 +1170,40 @@ async function saveTheme(e) {
     }
 }
 
-function resetThemeDefaults() {
-    document.getElementById('theme-title').value = 'Bootimus - Boot Menu';
-    document.getElementById('theme-console-width').value = 1920;
-    document.getElementById('theme-console-height').value = 1080;
-    document.getElementById('theme-text-fg').value = '#cccccc';
-    document.getElementById('theme-text-bg').value = '#000000';
-    document.getElementById('theme-disabled-fg').value = '#555555';
-    document.getElementById('theme-disabled-bg').value = '#000000';
-    document.getElementById('theme-highlight-fg').value = '#ffffff';
-    document.getElementById('theme-highlight-bg').value = '#0000aa';
-    document.getElementById('theme-separator-fg').value = '#555555';
-    document.getElementById('theme-separator-bg').value = '#000000';
-    document.getElementById('theme-title-fg').value = '#ffffff';
-    document.getElementById('theme-title-bg').value = '#0000aa';
+// USB Images
+async function loadUSBImages() {
+    try {
+        const res = await fetch(`${API_BASE}/usb`);
+        const data = await res.json();
+        const container = document.getElementById('usb-images-content');
+
+        if (!data.success || !data.data || data.data.length === 0) {
+            container.innerHTML = '<p style="color: #64748b;">No USB boot images available.</p>';
+            return;
+        }
+
+        let html = '<table class="data-table"><thead><tr><th>Image</th><th>Size</th><th>Type</th><th>Action</th></tr></thead><tbody>';
+        for (const img of data.data) {
+            const size = formatBytes(img.size);
+            const isSecureBoot = img.name.includes('secureboot');
+            const type = isSecureBoot ? 'UEFI Secure Boot' : 'BIOS / UEFI';
+            html += `<tr>
+                <td>${escapeHtml(img.name)}</td>
+                <td>${size}</td>
+                <td>${type}</td>
+                <td><a href="${API_BASE}/usb/download?name=${encodeURIComponent(img.name)}" class="btn btn-sm btn-primary">Download</a></td>
+            </tr>`;
+        }
+        html += '</tbody></table>';
+        html += `<div style="margin-top: 15px; padding: 15px; background: #1e293b; border-radius: 8px; color: #94a3b8; font-size: 13px;">
+            <strong style="color: #38bdf8;">Writing to USB:</strong><br>
+            <code style="color: #e2e8f0;">sudo dd if=bootimus.usb of=/dev/sdX bs=4M status=progress</code><br><br>
+            Replace <code>/dev/sdX</code> with your USB device. The USB boots iPXE which uses DHCP to find bootimus automatically.
+        </div>`;
+        container.innerHTML = html;
+    } catch (err) {
+        document.getElementById('usb-images-content').innerHTML = '<p style="color: #ef4444;">Failed to load USB images</p>';
+    }
 }
 
 // Upload

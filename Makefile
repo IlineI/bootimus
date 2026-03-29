@@ -1,4 +1,4 @@
-.PHONY: help build run clean docker-build docker-up docker-down docker-push release
+.PHONY: help build run clean docker-build docker-up docker-down docker-push release binaries secureboot
 
 VERSION    ?= $(shell cat VERSION)
 DOCKER_USER ?= garybowers
@@ -22,10 +22,15 @@ help:
 	@echo "  make docker-down      - Stop services"
 	@echo ""
 	@echo "Publish:"
-	@echo "  make release          - Build all platform binaries for GitHub release"
+	@echo "  make binaries         - Build multi-arch binaries via docker buildx"
+	@echo "  make release          - Build binaries and show upload instructions"
 	@echo "  make docker-push      - Build and push multi-arch images to Docker Hub"
 	@echo ""
 	@echo "Override version:  VERSION=1.0.0 make build"
+
+secureboot:
+	@echo "Downloading Secure Boot bootloaders..."
+	./scripts/download-secureboot.sh
 
 ## Local (binary) -------------------------------------------------------------
 
@@ -53,20 +58,31 @@ docker-down:
 
 ## Publish --------------------------------------------------------------------
 
-release: clean
-	@echo "Building release v$(VERSION)..."
-	CGO_ENABLED=1 GOOS=linux   GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o bootimus-linux-amd64 .
-	CGO_ENABLED=1 GOOS=linux   GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o bootimus-linux-arm64 .
-	CGO_ENABLED=1 GOOS=darwin  GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o bootimus-darwin-amd64 .
-	CGO_ENABLED=1 GOOS=darwin  GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o bootimus-darwin-arm64 .
-	CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o bootimus-windows-amd64.exe .
+PLATFORMS ?= linux/amd64,linux/arm64
+
+release: clean binaries
 	@echo ""
 	@echo "Release v$(VERSION) binaries built:"
 	@ls -lh bootimus-*
 	@echo ""
 	@echo "Upload these to GitHub: Repo -> Releases -> Draft a new release -> Tag: v$(VERSION)"
 
-PLATFORMS ?= linux/amd64,linux/arm64
+binaries:
+	@echo "Building binaries v$(VERSION) via docker buildx..."
+	docker buildx create --use --name bootimus-builder --driver docker-container 2>/dev/null || docker buildx use bootimus-builder
+	docker buildx build \
+		--platform $(PLATFORMS) \
+		--target builder \
+		--build-arg VERSION=$(VERSION) \
+		--output type=local,dest=./dist .
+	@# Flatten platform directories into release binaries
+	@for dir in dist/*/; do \
+		plat=$$(basename "$$dir"); \
+		for f in "$$dir"out/bootimus-*; do \
+			cp "$$f" "./"; \
+		done; \
+	done
+	@rm -rf dist
 
 docker-push:
 	docker buildx create --use --name bootimus-builder --driver docker-container 2>/dev/null || docker buildx use bootimus-builder

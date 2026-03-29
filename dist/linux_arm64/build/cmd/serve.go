@@ -1,0 +1,183 @@
+package cmd
+
+import (
+	"fmt"
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"bootimus/internal/auth"
+	"bootimus/internal/server"
+	"bootimus/internal/storage"
+
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+)
+
+const (
+	colorReset      = "\033[0m"
+	colorLightGreen = "\033[92m"
+	colorYellow     = "\033[33m"
+)
+
+var resetAdminPassword bool
+
+var serveCmd = &cobra.Command{
+	Use:   "serve",
+	Short: "Start the PXE/HTTP boot server",
+	Long:  `Start the TFTP and HTTP servers to provide network boot services`,
+	Run:   runServe,
+}
+
+func init() {
+	rootCmd.AddCommand(serveCmd)
+	serveCmd.Flags().BoolVar(&resetAdminPassword, "reset-admin-password", false, "Reset admin password to a new random value")
+}
+
+func printBanner() {
+	banner := `
+   ____              __  _
+  / __ )____  ____  / /_(_)___ ___  __  _______
+ / __  / __ \/ __ \/ __/ / __ '__ \/ / / / ___/
+/ /_/ / /_/ / /_/ / /_/ / / / / / / /_/ (__  )
+\____/\____/\____/\__/_/_/ /_/ /_/\__,_/____/
+`
+	fmt.Printf("%s%s%s", colorLightGreen, banner, colorReset)
+	fmt.Printf("%sVersion: %s%s\n", colorYellow, server.Version, colorReset)
+	fmt.Printf("%sPXE/HTTP Boot Server%s\n\n", colorLightGreen, colorReset)
+}
+
+func runServe(cmd *cobra.Command, args []string) {
+	server.InitGlobalLogger()
+
+	printBanner()
+
+	dataDir := viper.GetString("data_dir")
+
+	isoDir := dataDir + "/isos"
+	bootloadersDir := dataDir + "/bootloaders"
+
+	for _, dir := range []string{dataDir, isoDir, bootloadersDir} {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			log.Fatalf("Failed to create directory %s: %v", dir, err)
+		}
+	}
+
+	log.Printf("Data directory structure initialized at: %s", dataDir)
+	log.Printf("  - ISOs: %s", isoDir)
+	log.Printf("  - Bootloaders: %s", bootloadersDir)
+
+	serverAddr := viper.GetString("server_addr")
+	if serverAddr == "" {
+		serverAddr = server.GetOutboundIP()
+		log.Printf("Auto-detected server IP: %s", serverAddr)
+	}
+
+	var store storage.Storage
+	var err error
+
+	pgHost := viper.GetString("db.host")
+	if pgHost != "" {
+		dbCfg := &storage.Config{
+			Host:     pgHost,
+			Port:     viper.GetInt("db.port"),
+			User:     viper.GetString("db.user"),
+			Password: viper.GetString("db.password"),
+			DBName:   viper.GetString("db.name"),
+			SSLMode:  viper.GetString("db.sslmode"),
+		}
+
+		log.Printf("Connecting to PostgreSQL database at %s:%d...", pgHost, viper.GetInt("db.port"))
+
+		maxRetries := 10
+		for i := 0; i < maxRetries; i++ {
+			store, err = storage.NewPostgresStore(dbCfg)
+			if err == nil {
+				break
+			}
+
+			if i < maxRetries-1 {
+				waitTime := (1 << uint(i))
+				log.Printf("Database connection failed (attempt %d/%d): %v", i+1, maxRetries, err)
+				log.Printf("Retrying in %d seconds...", waitTime)
+				time.Sleep(time.Duration(waitTime) * time.Second)
+			}
+		}
+
+		if err != nil {
+			log.Fatalf("Failed to connect to database after %d attempts: %v", maxRetries, err)
+		}
+
+		if err := store.AutoMigrate(); err != nil {
+			log.Fatalf("Failed to run database migrations: %v", err)
+		}
+
+		log.Println("Database connected and migrations completed (PostgreSQL)")
+	} else {
+		log.Printf("No PostgreSQL configuration found, using local SQLite database")
+		store, err = storage.NewSQLiteStore(dataDir)
+		if err != nil {
+			log.Fatalf("Failed to initialize SQLite store: %v", err)
+		}
+
+		if err := store.AutoMigrate(); err != nil {
+			log.Fatalf("Failed to run database migrations: %v", err)
+		}
+
+		log.Printf("Local database initialized at %s/bootimus.db (SQLite)", dataDir)
+	}
+
+	if resetAdminPassword {
+		password, err := store.ResetAdminPassword()
+		if err != nil {
+			log.Fatalf("Failed to reset admin password: %v", err)
+		}
+
+		log.Println("╔════════════════════════════════════════════════════════════════╗")
+		log.Println("║                  ADMIN PASSWORD RESET                          ║")
+		log.Println("╠════════════════════════════════════════════════════════════════╣")
+		log.Printf("║  Username: %-50s ║\n", "admin")
+		log.Printf("║  New Password: %-46s ║\n", password)
+		log.Println("╠════════════════════════════════════════════════════════════════╣")
+		log.Println("║  This password will NOT be shown again!                        ║")
+		log.Println("║  Save it now before continuing.                                ║")
+		log.Println("╚════════════════════════════════════════════════════════════════╝")
+		log.Println("\nContinuing to start server...")
+	}
+
+	authMgr, err := auth.NewManager(store)
+	if err != nil {
+		log.Fatalf("Failed to initialise authentication: %v", err)
+	}
+
+	cfg := &server.Config{
+		TFTPPort:       viper.GetInt("tftp_port"),
+		TFTPSinglePort: viper.GetBool("tftp_single_port"),
+		HTTPPort:       viper.GetInt("http_port"),
+		AdminPort:      viper.GetInt("admin_port"),
+		BootDir:        bootloadersDir,
+		DataDir:        dataDir,
+		ISODir:         isoDir,
+		ServerAddr:     serverAddr,
+		Storage:        store,
+		Auth:           authMgr,
+		NBDEnabled:     viper.GetBool("nbd_enabled"),
+		NBDPort:        viper.GetInt("nbd_port"),
+	}
+
+	srv := server.New(cfg)
+	if err := srv.Start(); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	<-sigChan
+
+	log.Println("Received shutdown signal...")
+	if err := srv.Shutdown(); err != nil {
+		log.Printf("Error during shutdown: %v", err)
+	}
+}

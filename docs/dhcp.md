@@ -26,6 +26,15 @@ To enable PXE network booting, your DHCP server must be configured to:
 
 **Replace `192.168.1.10` with your Bootimus server IP address in all examples below.**
 
+### Bootloader Filenames
+
+| Client Type | DHCP Filename | Notes |
+|-------------|---------------|-------|
+| UEFI (no Secure Boot) | `ipxe.efi` | Custom-built with embedded script |
+| UEFI Secure Boot (x86_64) | `bootimus-shimx64.efi` | Microsoft-signed shim, loads signed iPXE |
+| UEFI Secure Boot (ARM64) | `bootimus-shimaa64.efi` | Microsoft-signed shim, loads signed iPXE |
+| Legacy BIOS | `undionly.kpxe` | Standard PXE bootloader |
+
 ### Boot Flow
 
 ```
@@ -36,6 +45,19 @@ Client → TFTP Request for bootloader (ipxe.efi or undionly.kpxe)
 Client → HTTP Request for menu.ipxe
       ← Boot menu displayed
 Client → Boot selected ISO
+```
+
+### Secure Boot Flow
+
+```
+Client → DHCP Request
+      ← DHCP Offer (IP, next-server, bootimus-shimx64.efi)
+Client → TFTP Request for bootimus-shimx64.efi (Microsoft-signed shim)
+      ← Shim downloaded, verified by UEFI firmware
+Shim   → TFTP Request for bootimus.efi (iPXE signed by iPXE CA)
+      ← Signed iPXE downloaded, verified by shim
+iPXE   → DHCP Request, loads autoexec.ipxe from TFTP
+      ← Boot menu displayed
 ```
 
 ## ISC DHCP Server

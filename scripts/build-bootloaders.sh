@@ -20,12 +20,13 @@ docker build -t ipxe-builder -f - "$BOOTLOADERS_DIR" <<'DOCKERFILE'
 FROM debian:bookworm
 
 RUN apt-get update && apt-get install -y \
-    git make gcc libc6-dev liblzma-dev mtools isolinux \
+    git make gcc libc6-dev liblzma-dev mtools isolinux syslinux syslinux-common \
     gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \
     libc6-dev-arm64-cross ca-certificates
 
 WORKDIR /build
-RUN git clone --depth 1 https://github.com/ipxe/ipxe.git
+RUN git clone https://github.com/ipxe/ipxe.git && \
+    cd ipxe && git checkout 12798ec29aa8a64d8675c4378b99f5fe28447afb
 
 COPY embed.ipxe /build/ipxe/src/embed.ipxe
 
@@ -33,6 +34,7 @@ WORKDIR /build/ipxe/src
 
 RUN make bin/undionly.kpxe EMBED=embed.ipxe
 RUN make bin-x86_64-efi/ipxe.efi EMBED=embed.ipxe
+RUN make bin-x86_64-efi/ipxe.usb EMBED=embed.ipxe
 RUN make CROSS=aarch64-linux-gnu- bin-arm64-efi/ipxe.efi EMBED=embed.ipxe
 DOCKERFILE
 
@@ -42,6 +44,7 @@ echo "Extracting bootloaders..."
 CONTAINER_ID=$(docker create ipxe-builder echo)
 docker cp "$CONTAINER_ID:/build/ipxe/src/bin/undionly.kpxe" "$BOOTLOADERS_DIR/undionly.kpxe"
 docker cp "$CONTAINER_ID:/build/ipxe/src/bin-x86_64-efi/ipxe.efi" "$BOOTLOADERS_DIR/ipxe.efi"
+docker cp "$CONTAINER_ID:/build/ipxe/src/bin-x86_64-efi/ipxe.usb" "$BOOTLOADERS_DIR/bootimus.usb"
 docker cp "$CONTAINER_ID:/build/ipxe/src/bin-arm64-efi/ipxe.efi" "$BOOTLOADERS_DIR/ipxe-arm64.efi"
 docker rm "$CONTAINER_ID" > /dev/null
 

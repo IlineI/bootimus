@@ -18,6 +18,7 @@ I've used Claude CLI to help with some parts of this project - mostly making the
 - **MAC-based ACL**: Per-client ISO menus (assigned clients see only their images)
 - **Folder-based groups**: Organise ISOs into subdirectories for automatic menu grouping
 - **Admin interface**: Full-featured web UI with REST API
+- **Secure Boot support**: Microsoft-signed shim bootloader for UEFI Secure Boot environments
 - **Docker ready**: Multi-arch images (amd64/arm64)
 - **Kernel extraction**: Faster boots with reduced bandwidth
 - **Netboot support**: Debian/Ubuntu network installer optimisation

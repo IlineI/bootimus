@@ -981,23 +981,23 @@
                         <label>Menu Title</label>
                         <input type="text" id="theme-title" placeholder="Bootimus - Boot Menu">
                     </div>
-                    <!-- Console resolution and colour theme hidden until iPXE build supports them -->
-                    <input type="hidden" id="theme-console-width" value="0">
-                    <input type="hidden" id="theme-console-height" value="0">
-                    <input type="hidden" id="theme-text-fg" value="#cccccc">
-                    <input type="hidden" id="theme-text-bg" value="#000000">
-                    <input type="hidden" id="theme-disabled-fg" value="#555555">
-                    <input type="hidden" id="theme-disabled-bg" value="#000000">
-                    <input type="hidden" id="theme-highlight-fg" value="#ffffff">
-                    <input type="hidden" id="theme-highlight-bg" value="#0000aa">
-                    <input type="hidden" id="theme-separator-fg" value="#555555">
-                    <input type="hidden" id="theme-separator-bg" value="#000000">
-                    <input type="hidden" id="theme-title-fg" value="#ffffff">
-                    <input type="hidden" id="theme-title-bg" value="#0000aa">
                     <div style="display: flex; gap: 10px; margin-top: 10px;">
                         <button type="submit" class="btn btn-primary">Save Theme</button>
                     </div>
                 </form>
+            </div>
+            <div class="card" style="margin-top: 20px;">
+                <h2>USB Boot Images</h2>
+                <p style="color: #94a3b8; margin-bottom: 20px;">
+                    Download bootable USB images for machines that don't support PXE network booting.
+                    Write to a USB stick and boot from it to access the bootimus menu.
+                </p>
+                <div id="usb-images-content">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        Loading...
+                    </div>
+                </div>
             </div>
         </div>
 

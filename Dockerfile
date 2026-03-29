@@ -17,7 +17,10 @@ ARG TARGETOS=linux
 ARG TARGETARCH
 RUN CGO_ENABLED=1 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
     -a -ldflags="-w -s -X bootimus/internal/server.Version=${VERSION}" \
-    -o bootimus .
+    -o /out/bootimus-${TARGETOS}-${TARGETARCH} .
+
+# Alias for runtime stage
+RUN cp /out/bootimus-${TARGETOS}-${TARGETARCH} /out/bootimus
 
 # Stage 2: Runtime
 FROM debian:trixie-slim
@@ -26,7 +29,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wimtools \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /build/bootimus /bootimus
+COPY --from=builder /out/bootimus /bootimus
 
 EXPOSE 69/udp 8080/tcp 8081/tcp 10809/tcp
 

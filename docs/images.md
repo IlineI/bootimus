@@ -114,6 +114,33 @@ curl -u admin:password -X POST http://localhost:8081/api/images/extract \
   -d '{"filename": "ubuntu-24.04-live-server-amd64.iso"}'
 ```
 
+### Manual Extraction
+
+If the built-in extractor doesn't support your ISO, you can extract the boot files manually and bootimus will detect them automatically.
+
+1. Create a directory with the same name as the ISO (minus the `.iso` extension):
+   ```bash
+   mkdir -p data/isos/my-custom-distro/
+   ```
+
+2. Place the kernel and initrd in that directory with these exact names:
+   ```
+   data/isos/
+   ├── my-custom-distro.iso
+   └── my-custom-distro/
+       ├── vmlinuz          # kernel
+       └── initrd           # initrd/initramfs
+   ```
+
+3. Click **"Scan for ISOs"** in the admin panel (or restart bootimus). The image will be automatically detected as extracted and set to kernel boot method.
+
+This also works for ISOs in subdirectories:
+```
+data/isos/linux/my-custom-distro.iso
+data/isos/linux/my-custom-distro/vmlinuz
+data/isos/linux/my-custom-distro/initrd
+```
+
 ### What Gets Extracted
 
 Bootimus automatically detects the distribution and extracts:

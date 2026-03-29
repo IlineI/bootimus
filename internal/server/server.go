@@ -980,6 +980,9 @@ func (s *Server) setupAdminInterface(mux *http.ServeMux) {
 		}
 	}))
 
+	mux.HandleFunc("/api/usb", authWrap(adminHandler.ListUSBImages))
+	mux.HandleFunc("/api/usb/download", authWrap(adminHandler.DownloadUSBImage))
+
 	mux.HandleFunc("/api/images/files", authWrap(adminHandler.ListImageFiles))
 	mux.HandleFunc("/api/images/files/delete", authWrap(adminHandler.DeleteImageFile))
 }

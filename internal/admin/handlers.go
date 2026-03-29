@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"bootimus/bootloaders"
 	"bootimus/internal/extractor"
 	"bootimus/internal/models"
 	"bootimus/internal/storage"
@@ -247,6 +248,76 @@ func (h *Handler) syncFilesystemToDatabase() {
 	if err := h.storage.SyncImages(isoFiles); err != nil {
 		log.Printf("Failed to sync images with database: %v", err)
 	}
+
+	h.detectManualExtractions()
+}
+
+// detectManualExtractions checks for manually extracted boot files on disk
+// and marks images as extracted if vmlinuz and initrd exist in the expected directory.
+func (h *Handler) detectManualExtractions() {
+	images, err := h.storage.ListImages()
+	if err != nil {
+		return
+	}
+
+	for _, image := range images {
+		if image.Extracted {
+			continue
+		}
+
+		isoBase := strings.TrimSuffix(filepath.Base(image.Filename), filepath.Ext(image.Filename))
+		bootDir := filepath.Join(h.isoDir, filepath.Dir(image.Filename), isoBase)
+
+		kernelPath := filepath.Join(bootDir, "vmlinuz")
+		initrdPath := filepath.Join(bootDir, "initrd")
+
+		kernelExists := fileExistsOnDisk(kernelPath)
+		initrdExists := fileExistsOnDisk(initrdPath)
+
+		if !kernelExists || !initrdExists {
+			continue
+		}
+
+		now := time.Now()
+		image.Extracted = true
+		image.KernelPath = kernelPath
+		image.InitrdPath = initrdPath
+		image.BootMethod = "kernel"
+		image.ExtractedAt = &now
+
+		if image.Distro == "" {
+			image.Distro = detectDistroFromFilename(image.Filename)
+		}
+
+		if err := h.storage.UpdateImage(image.Filename, image); err != nil {
+			log.Printf("Failed to update manually extracted image %s: %v", image.Filename, err)
+		} else {
+			log.Printf("Detected manual extraction for %s", image.Filename)
+		}
+	}
+}
+
+func fileExistsOnDisk(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}
+
+func detectDistroFromFilename(filename string) string {
+	lower := strings.ToLower(filename)
+	patterns := map[string]string{
+		"ubuntu": "ubuntu", "debian": "debian", "arch": "arch",
+		"fedora": "fedora", "centos": "centos", "rocky": "centos",
+		"alma": "centos", "opensuse": "opensuse", "nixos": "nixos",
+		"proxmox": "debian", "truenas": "debian", "pop-os": "ubuntu",
+		"pop_os": "ubuntu", "mint": "ubuntu", "kali": "debian",
+		"windows": "windows", "freebsd": "freebsd",
+	}
+	for pattern, distro := range patterns {
+		if strings.Contains(lower, pattern) {
+			return distro
+		}
+	}
+	return ""
 }
 
 func (h *Handler) ListImages(w http.ResponseWriter, r *http.Request) {
@@ -2331,28 +2402,72 @@ func (h *Handler) UpdateMenuTheme(w http.ResponseWriter, r *http.Request) {
 		h.sendJSON(w, http.StatusBadRequest, Response{Success: false, Error: "Invalid request body"})
 		return
 	}
-	if theme.ConsoleWidth != 0 {
-		if theme.ConsoleWidth < 640 {
-			theme.ConsoleWidth = 640
-		}
-		if theme.ConsoleWidth > 1920 {
-			theme.ConsoleWidth = 1920
-		}
-	}
-	if theme.ConsoleHeight != 0 {
-		if theme.ConsoleHeight < 480 {
-			theme.ConsoleHeight = 480
-		}
-		if theme.ConsoleHeight > 1080 {
-			theme.ConsoleHeight = 1080
-		}
-	}
 	if err := h.storage.UpdateMenuTheme(&theme); err != nil {
 		h.sendJSON(w, http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
 		return
 	}
 	log.Printf("Admin: Updated menu theme settings")
 	h.sendJSON(w, http.StatusOK, Response{Success: true, Message: "Theme updated", Data: theme})
+}
+
+func (h *Handler) ListUSBImages(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.sendJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Error: "Method not allowed"})
+		return
+	}
+
+	entries, err := bootloaders.Bootloaders.ReadDir(".")
+	if err != nil {
+		h.sendJSON(w, http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+
+	var images []map[string]interface{}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".usb") {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		images = append(images, map[string]interface{}{
+			"name": entry.Name(),
+			"size": info.Size(),
+		})
+	}
+
+	h.sendJSON(w, http.StatusOK, Response{Success: true, Data: images})
+}
+
+func (h *Handler) DownloadUSBImage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.sendJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Error: "Method not allowed"})
+		return
+	}
+
+	name := r.URL.Query().Get("name")
+	if name == "" {
+		h.sendJSON(w, http.StatusBadRequest, Response{Success: false, Error: "name parameter required"})
+		return
+	}
+
+	name = filepath.Base(name)
+	if !strings.HasSuffix(name, ".usb") {
+		h.sendJSON(w, http.StatusBadRequest, Response{Success: false, Error: "Invalid file type"})
+		return
+	}
+
+	data, err := bootloaders.Bootloaders.ReadFile(name)
+	if err != nil {
+		h.sendJSON(w, http.StatusNotFound, Response{Success: false, Error: "USB image not found"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", name))
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(data)))
+	w.Write(data)
 }
 
 func (h *Handler) ListImageFiles(w http.ResponseWriter, r *http.Request) {

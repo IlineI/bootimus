@@ -46,7 +46,6 @@ func (mb *MenuBuilder) Build() string {
 	var sb strings.Builder
 
 	sb.WriteString("#!ipxe\n\n")
-	sb.WriteString(mb.buildThemeHeader())
 	sb.WriteString(mb.buildMainMenu())
 	sb.WriteString(mb.buildGroupMenus())
 	sb.WriteString(mb.buildImageBootSections())
@@ -62,27 +61,6 @@ func (mb *MenuBuilder) menuTitle() string {
 	return "Bootimus - Boot Menu"
 }
 
-func (mb *MenuBuilder) buildThemeHeader() string {
-	if mb.theme == nil {
-		return ""
-	}
-
-	var sb strings.Builder
-
-	sb.WriteString("\n")
-	return sb.String()
-}
-
-func clamp(v, min, max int) int {
-	if v < min {
-		return min
-	}
-	if v > max {
-		return max
-	}
-	return v
-}
-
 // encodePathSegments URL-encodes each segment of a path (handling spaces etc.)
 // while preserving / separators, so "linux/Ubuntu Server.iso" becomes "linux/Ubuntu%20Server.iso"
 func encodePathSegments(path string) string {
@@ -91,21 +69,6 @@ func encodePathSegments(path string) string {
 		segments[i] = url.PathEscape(seg)
 	}
 	return strings.Join(segments, "/")
-}
-
-func cssHexToIPXE(hex string) string {
-	hex = strings.TrimPrefix(hex, "#")
-	if len(hex) == 6 {
-		return "0x00" + hex
-	}
-	return "0x00000000"
-}
-
-func writeColour(sb *strings.Builder, index int, cssHex string) {
-	if cssHex == "" {
-		return
-	}
-	sb.WriteString(fmt.Sprintf("colour --rgb %s %d\n", cssHexToIPXE(cssHex), index))
 }
 
 func (mb *MenuBuilder) buildMainMenu() string {
