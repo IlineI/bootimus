@@ -25,8 +25,7 @@ RUN apt-get update && apt-get install -y \
     libc6-dev-arm64-cross ca-certificates
 
 WORKDIR /build
-RUN git clone https://github.com/ipxe/ipxe.git && \
-    cd ipxe && git checkout 12798ec29aa8a64d8675c4378b99f5fe28447afb
+RUN git clone --depth 1 https://github.com/ipxe/ipxe.git
 
 COPY embed.ipxe /build/ipxe/src/embed.ipxe
 
