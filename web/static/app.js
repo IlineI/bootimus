@@ -9,6 +9,26 @@ let imageSortColumn = 'name';
 let imageSortDirection = 'asc';
 let extractionProgress = {}; // Track extraction progress by filename
 
+// Theme
+function toggleTheme() {
+    const html = document.documentElement;
+    const current = html.getAttribute('data-theme');
+    const next = current === 'dark' ? 'light' : 'dark';
+    html.setAttribute('data-theme', next);
+    localStorage.setItem('bootimus_theme', next);
+    document.getElementById('theme-toggle-btn').textContent = next === 'dark' ? '🌙' : '☀️';
+}
+
+function loadSavedTheme() {
+    const saved = localStorage.getItem('bootimus_theme') || 'light';
+    if (saved === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        document.getElementById('theme-toggle-btn').textContent = '🌙';
+    } else {
+        document.getElementById('theme-toggle-btn').textContent = '☀️';
+    }
+}
+
 // Utility Functions
 function escapeHtml(text) {
     const div = document.createElement('div');
@@ -153,6 +173,7 @@ function showNotification(message, type = 'info') {
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
+    loadSavedTheme();
     setupTabs();
     setupForms();
     setupUpload();
@@ -172,7 +193,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(() => {
         loadStats();
         loadActiveSessions();
-        const activeTab = document.querySelector('.tab.active').dataset.tab;
+        const activeTab = (document.querySelector('.nav-item.active') || document.querySelector('.tab.active')).dataset.tab;
         if (activeTab === 'clients') loadClients();
         if (activeTab === 'images') loadImages();
         if (activeTab === 'public-files') loadPublicFiles();
@@ -182,7 +203,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Refresh server info more frequently for live stats (every 5 seconds)
     setInterval(() => {
-        const activeTab = document.querySelector('.tab.active').dataset.tab;
+        const activeTab = (document.querySelector('.nav-item.active') || document.querySelector('.tab.active')).dataset.tab;
         if (activeTab === 'server') loadServerInfo();
     }, 5000);
 
@@ -192,25 +213,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Tab Management
 function setupTabs() {
-    // Only setup tabs that are NOT inside a modal
-    document.querySelectorAll('.tabs:not(#image-properties-modal .tabs) .tab').forEach(tab => {
-        tab.addEventListener('click', () => {
-            // Only affect tabs in the same tabs container (main page tabs)
-            const tabsContainer = tab.closest('.tabs');
-            tabsContainer.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    // Setup sidebar nav items
+    document.querySelectorAll('.sidebar-nav .nav-item').forEach(item => {
+        item.addEventListener('click', () => {
+            // Update sidebar active state
+            document.querySelectorAll('.sidebar-nav .nav-item').forEach(n => n.classList.remove('active'));
+            item.classList.add('active');
+
+            // Update tab content
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.getElementById(`${item.dataset.tab}-tab`).classList.add('active');
 
-            tab.classList.add('active');
-            document.getElementById(`${tab.dataset.tab}-tab`).classList.add('active');
+            // Also update hidden tabs for compat
+            document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
+            const matchingTab = document.querySelector(`.tabs .tab[data-tab="${item.dataset.tab}"]`);
+            if (matchingTab) matchingTab.classList.add('active');
 
-            if (tab.dataset.tab === 'groups') {
-                loadGroups();
-            }
-            if (tab.dataset.tab === 'settings') {
-                loadTheme();
-                loadUSBImages();
-            }
+            if (item.dataset.tab === 'groups') loadGroups();
+            if (item.dataset.tab === 'settings') { loadTheme(); loadUSBImages(); }
         });
+    });
+
+    // Keep old tab click handlers for modal tabs
+    document.querySelectorAll('#image-properties-modal .tabs .tab').forEach(tab => {
+        // These are handled by switchPropsTab, no action needed
     });
 }
 
@@ -283,15 +309,15 @@ function renderActiveSessions(sessions) {
         `;
     }).join('');
 
-    content.innerHTML = html || '<p style="color: #94a3b8;">No active sessions</p>';
+    content.innerHTML = html || '<p style="color: var(--text-secondary);">No active sessions</p>';
 }
 
 function formatBytes(bytes) {
-    if (bytes === 0) return '0 B';
+    if (!bytes || bytes === 0) return '0 B';
     const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+    const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1);
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
 // Server Info
@@ -310,141 +336,112 @@ async function loadServerInfo() {
 
 function renderServerInfo(info) {
     const container = document.getElementById('server-info');
-
     const sysStats = info.system_stats || {};
 
-    const html = `
-        ${info.version || sysStats.host ? `
-            <div class="info-section" style="margin-bottom: 20px;">
-                <h3>System Information</h3>
-                ${info.version ? `
-                <div class="info-item">
-                    <span class="info-label">Bootimus Version</span>
-                    <span class="info-value"><code>${info.version}</code></span>
-                </div>
-                ` : ''}
-                ${info.configuration && info.configuration.runtime_mode ? `
-                <div class="info-item">
-                    <span class="info-label">Runtime Mode</span>
-                    <span class="info-value"><span class="badge ${info.configuration.runtime_mode === 'Docker' ? 'badge-info' : 'badge-success'}">${info.configuration.runtime_mode}</span></span>
-                </div>
-                ` : ''}
-                ${sysStats.host ? `
-                    ${sysStats.host.platform ? `
-                    <div class="info-item">
-                        <span class="info-label">Operating System</span>
-                        <span class="info-value">${sysStats.host.platform} ${sysStats.host.platform_version || ''}</span>
-                    </div>
-                    ` : sysStats.host.os ? `
-                    <div class="info-item">
-                        <span class="info-label">Operating System</span>
-                        <span class="info-value">${sysStats.host.os}</span>
-                    </div>
-                    ` : ''}
-                    ${sysStats.host.architecture ? `
-                    <div class="info-item">
-                        <span class="info-label">Architecture</span>
-                        <span class="info-value">${sysStats.host.architecture}</span>
-                    </div>
-                    ` : ''}
-                ` : ''}
-                ${sysStats.uptime ? `
-                <div class="info-item">
-                    <span class="info-label">Server Uptime</span>
-                    <span class="info-value">${sysStats.uptime}</span>
-                </div>
-                ` : ''}
-            </div>
+    function resColor(pct) {
+        if (pct > 80) return 'var(--danger)';
+        if (pct > 60) return 'var(--warning)';
+        return 'var(--teal)';
+    }
+
+    // Build running status grid cells
+    let statusCards = '';
+    if (info.version) {
+        statusCards += `<div class="rs-metric"><span class="rs-label">Version</span><span class="rs-value">${info.version}</span></div>`;
+    }
+    if (sysStats.uptime) {
+        statusCards += `<div class="rs-metric"><span class="rs-label">Uptime</span><span class="rs-value" style="color: var(--accent)">${sysStats.uptime}</span></div>`;
+    }
+    if (info.configuration && info.configuration.runtime_mode) {
+        statusCards += `<div class="rs-metric"><span class="rs-label">Runtime Mode</span><span class="rs-value"><span class="badge ${info.configuration.runtime_mode === 'Docker' ? 'badge-info' : 'badge-success'}">${info.configuration.runtime_mode}</span></span></div>`;
+    }
+    if (sysStats.host) {
+        const os = sysStats.host.platform ? `${sysStats.host.platform} ${sysStats.host.platform_version || ''}`.trim() : (sysStats.host.os || '');
+        if (os) statusCards += `<div class="rs-metric"><span class="rs-label">OS</span><span class="rs-value">${os}</span></div>`;
+        if (sysStats.host.architecture) statusCards += `<div class="rs-metric"><span class="rs-label">Arch</span><span class="rs-value">${sysStats.host.architecture}</span></div>`;
+    }
+
+    // Build resource cards: small label, large colored value, thin bar, detail text
+    let resourceCards = '';
+    if (sysStats.cpu) {
+        const cpuPct = sysStats.cpu.usage_percent;
+        resourceCards += `
+        <div class="res-card">
+            <span class="res-label">CPU Usage</span>
+            <span class="res-big" style="color: ${resColor(cpuPct)}">${cpuPct.toFixed(1)}%</span>
+            <div class="res-bar"><div class="res-bar-fill" style="width: ${cpuPct}%; background: ${resColor(cpuPct)}"></div></div>
+            <span class="res-detail">${sysStats.cpu.cores} core${sysStats.cpu.cores !== 1 ? 's' : ''} available</span>
+        </div>`;
+    }
+    if (sysStats.memory) {
+        const memPct = sysStats.memory.used_percent;
+        resourceCards += `
+        <div class="res-card">
+            <span class="res-label">Memory</span>
+            <span class="res-big" style="color: ${resColor(memPct)}">${memPct.toFixed(1)}%</span>
+            <div class="res-bar"><div class="res-bar-fill" style="width: ${memPct}%; background: ${resColor(memPct)}"></div></div>
+            <span class="res-detail">${formatBytes(sysStats.memory.used)} used of ${formatBytes(sysStats.memory.total)}</span>
+        </div>`;
+    }
+    (sysStats.disk || []).forEach(disk => {
+        const diskPct = disk.used_percent;
+        resourceCards += `
+        <div class="res-card">
+            <span class="res-label">Disk ${disk.path}</span>
+            <span class="res-big" style="color: ${resColor(diskPct)}">${diskPct.toFixed(1)}%</span>
+            <div class="res-bar"><div class="res-bar-fill" style="width: ${diskPct}%; background: ${resColor(diskPct)}"></div></div>
+            <span class="res-detail">${formatBytes(disk.free)} free of ${formatBytes(disk.total)}</span>
+        </div>`;
+    });
+
+    // Build configuration key-value pairs
+    const configItems = Object.entries(info.configuration || {}).filter(([key]) => key !== 'runtime_mode').map(([key, value]) => `
+        <div class="info-item">
+            <span class="info-label">${key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
+            <span class="info-value">${value || '<em style="color:var(--text-muted)">-</em>'}</span>
+        </div>
+    `).join('');
+
+    // Build environment variable items
+    const envEntries = Object.entries(info.environment || {}).filter(([, v]) => v);
+    const envItems = envEntries.length > 0
+        ? envEntries.map(([key, value]) => `<div class="info-item"><span class="info-label">${key}</span><span class="info-value">${value}</span></div>`).join('')
+        : '<p style="color: var(--text-muted); padding: 16px 0; font-size: 13px;">No environment variables set</p>';
+
+    container.innerHTML = `
+        <div class="si-section">
+            <h3 class="si-heading">Running Status</h3>
+            <div class="rs-grid">${statusCards}</div>
+        </div>
+
+        ${resourceCards ? `
+        <div class="si-section">
+            <h3 class="si-heading si-heading-teal">System Resources</h3>
+            <div class="res-grid">${resourceCards}</div>
+        </div>
         ` : ''}
 
-        ${sysStats.cpu || sysStats.memory || (sysStats.disk && sysStats.disk.length) ? `
-            <div style="margin-bottom: 30px;">
-                <h3 style="margin-bottom: 15px;">System Resources</h3>
-                <div class="stats-grid">
-                    ${sysStats.cpu ? `
-                    <div class="stat-card">
-                        <div class="stat-card-header">
-                            <div class="stat-card-title">CPU Usage</div>
-                            <div class="stat-card-value" style="color: ${sysStats.cpu.usage_percent > 80 ? '#ef4444' : sysStats.cpu.usage_percent > 60 ? '#f59e0b' : '#10b981'}">
-                                ${sysStats.cpu.usage_percent.toFixed(1)}%
-                            </div>
-                        </div>
-                        <div class="progress-bar">
-                            <div class="progress-fill" style="width: ${sysStats.cpu.usage_percent}%; background: ${sysStats.cpu.usage_percent > 80 ? '#ef4444' : sysStats.cpu.usage_percent > 60 ? '#f59e0b' : '#10b981'}"></div>
-                        </div>
-                        <div class="stat-card-info">${sysStats.cpu.cores} CPU cores available</div>
-                    </div>
-                    ` : ''}
-
-                    ${sysStats.memory ? `
-                    <div class="stat-card">
-                        <div class="stat-card-header">
-                            <div class="stat-card-title">Memory Usage</div>
-                            <div class="stat-card-value" style="color: ${sysStats.memory.used_percent > 80 ? '#ef4444' : sysStats.memory.used_percent > 60 ? '#f59e0b' : '#10b981'}">
-                                ${sysStats.memory.used_percent.toFixed(1)}%
-                            </div>
-                        </div>
-                        <div class="progress-bar">
-                            <div class="progress-fill" style="width: ${sysStats.memory.used_percent}%; background: ${sysStats.memory.used_percent > 80 ? '#ef4444' : sysStats.memory.used_percent > 60 ? '#f59e0b' : '#10b981'}"></div>
-                        </div>
-                        <div class="stat-card-info">
-                            ${formatBytes(sysStats.memory.used)} / ${formatBytes(sysStats.memory.total)} (${formatBytes(sysStats.memory.free)} free)
-                        </div>
-                    </div>
-                    ` : ''}
-
-                    ${(sysStats.disk || []).map(disk => `
-                    <div class="stat-card">
-                        <div class="stat-card-header">
-                            <div class="stat-card-title">Disk: ${disk.path}</div>
-                            <div class="stat-card-value" style="color: ${disk.used_percent > 80 ? '#ef4444' : disk.used_percent > 60 ? '#f59e0b' : '#10b981'}">
-                                ${disk.used_percent.toFixed(1)}%
-                            </div>
-                        </div>
-                        <div class="progress-bar">
-                            <div class="progress-fill" style="width: ${disk.used_percent}%; background: ${disk.used_percent > 80 ? '#ef4444' : disk.used_percent > 60 ? '#f59e0b' : '#10b981'}"></div>
-                        </div>
-                        <div class="stat-card-info">
-                            ${formatBytes(disk.used)} / ${formatBytes(disk.total)} (${formatBytes(disk.free)} free)
-                        </div>
-                    </div>
-                    `).join('')}
+        <div class="si-section">
+            <div class="info-grid">
+                <div class="info-section">
+                    <h3>Configuration</h3>
+                    ${configItems}
                 </div>
-            </div>
-        ` : ''}
-
-        <div class="info-grid">
-            <div class="info-section">
-                <h3>Configuration</h3>
-                ${Object.entries(info.configuration || {}).filter(([key]) => key !== 'runtime_mode').map(([key, value]) => `
-                    <div class="info-item">
-                        <span class="info-label">${key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
-                        <span class="info-value">${value || '<em>not set</em>'}</span>
-                    </div>
-                `).join('')}
-            </div>
-            <div class="info-section">
-                <h3>Environment Variables</h3>
-                ${Object.entries(info.environment || {}).filter(([k, v]) => v).map(([key, value]) => `
-                    <div class="info-item">
-                        <span class="info-label">${key}</span>
-                        <span class="info-value">${value || '<em>not set</em>'}</span>
-                    </div>
-                `).join('')}
-                ${Object.entries(info.environment || {}).every(([k, v]) => !v) ? '<p style="color: #94a3b8; padding: 10px;">No environment variables set</p>' : ''}
+                <div class="info-section">
+                    <h3>Environment</h3>
+                    ${envItems}
+                </div>
             </div>
         </div>
     `;
-
-    container.innerHTML = html;
 }
 
 function formatBytes(bytes) {
-    if (bytes === 0) return '0 B';
+    if (!bytes || bytes === 0) return '0 B';
     const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+    const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1);
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
 // Clients
@@ -466,7 +463,7 @@ function renderClientsTable() {
     const container = document.getElementById('clients-table');
 
     if (clients.length === 0) {
-        container.innerHTML = '<p style="color: #94a3b8; padding: 20px;">No clients yet. Add one to get started.</p>';
+        container.innerHTML = '<p style="color: var(--text-secondary); padding: 20px;">No clients yet. Add one to get started.</p>';
         return;
     }
 
@@ -496,7 +493,7 @@ function renderClientsTable() {
                         <td>
                             ${(client.images || []).length > 0 ?
                                 `<span title="${(client.images || []).map(i => i.name).join(', ')}">${(client.images || []).length} images</span>` :
-                                '<span style="color: #94a3b8;">No images</span>'
+                                '<span style="color: var(--text-secondary);">No images</span>'
                             }
                         </td>
                         <td>${client.boot_count || 0}</td>
@@ -681,7 +678,7 @@ function renderImagesTable() {
     const container = document.getElementById('images-table');
 
     if (images.length === 0) {
-        container.innerHTML = '<p style="color: #94a3b8; padding: 20px;">No images yet. Upload or scan for ISOs.</p>';
+        container.innerHTML = '<p style="color: var(--text-secondary); padding: 20px;">No images yet. Upload or scan for ISOs.</p>';
         return;
     }
 
@@ -718,7 +715,7 @@ function renderImagesTable() {
                         <td>
                             ${img.group && img.group.name ?
                                 '<span class="badge badge-info">' + escapeHtml(img.group.name) + '</span>' :
-                                '<span style="color: #94a3b8;">-</span>'
+                                '<span style="color: var(--text-secondary);">-</span>'
                             }
                         </td>
                         <td>
@@ -1013,7 +1010,7 @@ function renderLogsTable(logs) {
     const container = document.getElementById('logs-table');
 
     if (logs.length === 0) {
-        container.innerHTML = '<p style="color: #94a3b8; padding: 20px;">No boot logs yet.</p>';
+        container.innerHTML = '<p style="color: var(--text-secondary); padding: 20px;">No boot logs yet.</p>';
         return;
     }
 
@@ -1178,7 +1175,7 @@ async function loadUSBImages() {
         const container = document.getElementById('usb-images-content');
 
         if (!data.success || !data.data || data.data.length === 0) {
-            container.innerHTML = '<p style="color: #64748b;">No USB boot images available.</p>';
+            container.innerHTML = '<p style="color: var(--text-secondary);">No USB boot images available.</p>';
             return;
         }
 
@@ -1195,9 +1192,9 @@ async function loadUSBImages() {
             </tr>`;
         }
         html += '</tbody></table>';
-        html += `<div style="margin-top: 15px; padding: 15px; background: #1e293b; border-radius: 8px; color: #94a3b8; font-size: 13px;">
-            <strong style="color: #38bdf8;">Writing to USB:</strong><br>
-            <code style="color: #e2e8f0;">sudo dd if=bootimus.usb of=/dev/sdX bs=4M status=progress</code><br><br>
+        html += `<div style="margin-top: 15px; padding: 15px; background: var(--bg-secondary); border-radius: 8px; color: var(--text-secondary); font-size: 13px;">
+            <strong style="color: var(--accent);">Writing to USB:</strong><br>
+            <code style="color: var(--text-primary);">sudo dd if=bootimus.usb of=/dev/sdX bs=4M status=progress</code><br><br>
             Replace <code>/dev/sdX</code> with your USB device. The USB boots iPXE which uses DHCP to find bootimus automatically.
         </div>`;
         container.innerHTML = html;
@@ -1263,7 +1260,7 @@ function setupUpload() {
         progressMsg.innerHTML = `
             <div>Uploading ${file.name} (${formatBytes(file.size)})</div>
             <div style="margin-top: 10px;">
-                <div style="background: #0f172a; height: 20px; border-radius: 10px; overflow: hidden;">
+                <div style="background: var(--bg-primary); height: 20px; border-radius: 10px; overflow: hidden;">
                     <div id="progress-bar" style="background: #38bdf8; height: 100%; width: 0%; transition: width 0.3s;"></div>
                 </div>
                 <div id="progress-text" style="margin-top: 5px; text-align: center;">Starting upload...</div>
@@ -1409,7 +1406,7 @@ function displayLogs(logs) {
     liveLogsDiv.innerHTML = '';
 
     if (logs.length === 0) {
-        liveLogsDiv.innerHTML = '<div style="color: #94a3b8;">No logs available. Logs will appear here as the server runs.</div>';
+        liveLogsDiv.innerHTML = '<div style="color: var(--text-secondary);">No logs available. Logs will appear here as the server runs.</div>';
         return;
     }
 
@@ -1466,7 +1463,7 @@ function disconnectLiveLogs() {
 }
 
 function clearLiveLogs() {
-    document.getElementById('live-logs').innerHTML = '<div style="color: #94a3b8;">Click "Refresh" to load logs...</div>';
+    document.getElementById('live-logs').innerHTML = '<div style="color: var(--text-secondary);">Click "Refresh" to load logs...</div>';
 }
 
 // ==================== User Management ====================
@@ -1491,7 +1488,7 @@ function loadUsers() {
 function renderUsersTable(users) {
     if (!users || users.length === 0) {
         document.getElementById('users-table').innerHTML =
-            '<p style="color: #94a3b8;">No users found</p>';
+            '<p style="color: var(--text-secondary);">No users found</p>';
         return;
     }
 
@@ -1717,8 +1714,8 @@ document.getElementById('edit-group-form').addEventListener('submit', async func
     };
 
     try {
-        const res = await fetch(`${API_BASE}/groups/update`, {
-            method: 'POST',
+        const res = await fetch(`${API_BASE}/groups/update?id=${groupData.id}`, {
+            method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(groupData)
         });
@@ -1919,7 +1916,7 @@ function renderPublicFilesTable(files) {
     const container = document.getElementById('public-files-table');
 
     if (files.length === 0) {
-        container.innerHTML = '<p style="color: #94a3b8; padding: 20px; text-align: center;">No public files found. Upload your first public file to get started.</p>';
+        container.innerHTML = '<p style="color: var(--text-secondary); padding: 20px; text-align: center;">No public files found. Upload your first public file to get started.</p>';
         return;
     }
 
@@ -1939,7 +1936,7 @@ function renderPublicFilesTable(files) {
         <tbody>
             ${files.map(file => `
                 <tr>
-                    <td><code style="color: #38bdf8;">${escapeHtml(file.filename)}</code></td>
+                    <td><code style="color: var(--accent);">${escapeHtml(file.filename)}</code></td>
                     <td>${escapeHtml(file.description || '-')}</td>
                     <td><span class="badge">${escapeHtml(file.content_type || 'unknown')}</span></td>
                     <td>${formatBytes(file.size)}</td>
@@ -2026,7 +2023,7 @@ function renderImageFilesTable(files, imageId, imageName) {
     const container = document.getElementById('image-files-table');
 
     if (files.length === 0) {
-        container.innerHTML = '<p style="color: #94a3b8; padding: 20px; text-align: center;">No files for this image yet.</p>';
+        container.innerHTML = '<p style="color: var(--text-secondary); padding: 20px; text-align: center;">No files for this image yet.</p>';
         return;
     }
 
@@ -2046,7 +2043,7 @@ function renderImageFilesTable(files, imageId, imageName) {
         <tbody>
             ${files.map(file => `
                 <tr>
-                    <td><code style="color: #38bdf8;">${escapeHtml(file.filename)}</code></td>
+                    <td><code style="color: var(--accent);">${escapeHtml(file.filename)}</code></td>
                     <td>${escapeHtml(file.description || '-')}</td>
                     <td><span class="badge">${escapeHtml(file.content_type || 'unknown')}</span></td>
                     <td>${formatBytes(file.size)}</td>
@@ -2240,11 +2237,11 @@ function copyFileURL() {
 }
 
 function formatBytes(bytes) {
-    if (bytes === 0) return '0 B';
+    if (!bytes || bytes === 0) return '0 B';
     const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+    const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1);
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
 let groups = [];
@@ -2258,7 +2255,7 @@ async function loadGroups() {
             groups = data.data;
             renderGroupsTable();
         } else {
-            document.getElementById('groups-table').innerHTML = '<p style="color: #94a3b8; padding: 20px;">No groups found.</p>';
+            document.getElementById('groups-table').innerHTML = '<p style="color: var(--text-secondary); padding: 20px;">No groups found.</p>';
         }
     } catch (err) {
         document.getElementById('groups-table').innerHTML = '<p style="color: #ef4444; padding: 20px;">Failed to load groups</p>';
@@ -2270,7 +2267,7 @@ function renderGroupsTable() {
     const container = document.getElementById('groups-table');
 
     if (!groups || groups.length === 0) {
-        container.innerHTML = '<p style="color: #94a3b8; padding: 20px;">No groups found. Click "+ Add Group" to create one.</p>';
+        container.innerHTML = '<p style="color: var(--text-secondary); padding: 20px;">No groups found. Click "+ Add Group" to create one.</p>';
         return;
     }
 
@@ -2363,8 +2360,8 @@ async function deleteGroup(groupId, groupName) {
     if (!confirm(`Delete group "${groupName}"? This will unassign all images from this group.`)) return;
 
     try {
-        const res = await fetch(`${API_BASE}/groups/delete`, {
-            method: 'POST',
+        const res = await fetch(`${API_BASE}/groups/delete?id=${groupId}`, {
+            method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: groupId })
         });
@@ -2450,7 +2447,7 @@ async function loadImageFileBrowser(filename) {
         if (data.success && data.data && data.data.files) {
             renderFileBrowser(data.data.files, filename);
         } else {
-            container.innerHTML = '<p style="color: #94a3b8; padding: 20px;">No files found for this image.</p>';
+            container.innerHTML = '<p style="color: var(--text-secondary); padding: 20px;">No files found for this image.</p>';
         }
     } catch (err) {
         container.innerHTML = '<p style="color: #ef4444; padding: 20px;">Failed to load file browser</p>';
@@ -2465,13 +2462,13 @@ function renderFileBrowser(files, filename) {
     const hasFiles = files && files.length > 0;
 
     let html = `
-        <div style="background: #0f172a; padding: 15px; border-radius: 6px; margin-bottom: 15px;">
+        <div style="background: var(--bg-primary); padding: 15px; border-radius: 6px; margin-bottom: 15px;">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-                <div style="font-family: monospace; color: #38bdf8;">📁 /isos/${escapeHtml(filename)}</div>
+                <div style="font-family: monospace; color: var(--accent);">📁 /isos/${escapeHtml(filename)}</div>
                 <button class="btn btn-danger btn-sm" onclick="deleteImageFile('${escapeHtml(filename)}', '${escapeHtml(baseDir)}', '${escapeHtml(filename)}', false, true)" style="padding: 4px 10px; font-size: 12px;">Delete ISO</button>
             </div>
             <div style="display: flex; align-items: center; justify-content: space-between;">
-                <div style="font-family: monospace; color: ${hasFiles ? '#38bdf8' : '#64748b'};">📁 /boot/${escapeHtml(baseDir)}/ ${hasFiles ? '' : '<span style="color: #94a3b8; font-size: 11px;">(not extracted)</span>'}</div>
+                <div style="font-family: monospace; color: ${hasFiles ? '#38bdf8' : '#64748b'};">📁 /boot/${escapeHtml(baseDir)}/ ${hasFiles ? '' : '<span style="color: var(--text-secondary); font-size: 11px;">(not extracted)</span>'}</div>
                 ${hasFiles ? '<button class="btn btn-danger btn-sm" onclick="deleteImageFile(\'' + escapeHtml(filename) + '\', \'' + escapeHtml(baseDir) + '\', \'\', true, false)" style="padding: 4px 10px; font-size: 12px;">Delete Boot Folder</button>' : ''}
             </div>
         </div>
@@ -2480,13 +2477,13 @@ function renderFileBrowser(files, filename) {
     if (hasFiles) {
         const tree = buildFileTree(files);
         html += `
-            <div style="max-height: 500px; overflow-y: auto; background: #0f172a; border-radius: 6px; padding: 10px;">
+            <div style="max-height: 500px; overflow-y: auto; background: var(--bg-primary); border-radius: 6px; padding: 10px;">
                 ${renderFileTreeNode(tree, filename, baseDir, '')}
             </div>
         `;
     } else {
         html += `
-            <div style="background: #0f172a; padding: 20px; border-radius: 6px; text-align: center; color: #94a3b8;">
+            <div style="background: var(--bg-primary); padding: 20px; border-radius: 6px; text-align: center; color: var(--text-secondary);">
                 No extracted files found. Extract the kernel first to browse files.
             </div>
         `;
@@ -2530,7 +2527,7 @@ function renderFileTreeNode(node, filename, baseDir, indent) {
 
         html += `
             <div style="margin-left: ${indent};">
-                <div style="padding: 6px; cursor: pointer; font-family: monospace; font-size: 13px; color: #e2e8f0; border-bottom: 1px solid #1e293b;" onclick="toggleTreeNode('${id}')">
+                <div style="padding: 6px; cursor: pointer; font-family: monospace; font-size: 13px; color: var(--text-primary); border-bottom: 1px solid #1e293b;" onclick="toggleTreeNode('${id}')">
                     <span id="${id}-icon">▶</span> 📁 ${escapeHtml(dirName)}
                 </div>
                 <div id="${id}" style="display: none;">
@@ -2543,8 +2540,8 @@ function renderFileTreeNode(node, filename, baseDir, indent) {
     const sortedFiles = node.files.sort((a, b) => a.name.localeCompare(b.name));
     for (const file of sortedFiles) {
         html += `
-            <div style="margin-left: ${indent}; padding: 6px; border-bottom: 1px solid #1e293b; font-family: monospace; font-size: 13px; color: #e2e8f0;">
-                📄 ${escapeHtml(file.name)} <span style="color: #94a3b8; font-size: 11px;">(${formatBytes(file.size)})</span>
+            <div style="margin-left: ${indent}; padding: 6px; border-bottom: 1px solid #1e293b; font-family: monospace; font-size: 13px; color: var(--text-primary);">
+                📄 ${escapeHtml(file.name)} <span style="color: var(--text-secondary); font-size: 11px;">(${formatBytes(file.size)})</span>
             </div>
         `;
     }
@@ -2710,26 +2707,26 @@ async function loadPropsImageFiles() {
 
         // 1. Uploaded Files Section (at top)
         html += '<div style="margin-bottom: 15px;">';
-        html += '<h4 style="margin: 0 0 8px 0; font-size: 14px; color: #60a5fa; border-bottom: 1px solid #334155; padding-bottom: 4px;">Uploaded Files</h4>';
+        html += '<h4 style="margin: 0 0 8px 0; font-size: 14px; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 4px;">Uploaded Files</h4>';
         if (autoinstallFiles.length > 0) {
             const tree = buildFSTree(autoinstallFiles, 'autoinstall/');
             html += renderFSTree(tree, filename, 0, true);
         } else {
-            html += '<div style="color: #94a3b8; font-size: 12px; padding: 6px 8px;">No uploaded files - use the form above to upload</div>';
+            html += '<div style="color: var(--text-secondary); font-size: 12px; padding: 6px 8px;">No uploaded files - use the form above to upload</div>';
         }
         html += '</div>';
 
         // 2. ISO File Section
         html += '<div style="margin-bottom: 15px;">';
-        html += '<h4 style="margin: 0 0 8px 0; font-size: 14px; color: #60a5fa; border-bottom: 1px solid #334155; padding-bottom: 4px;">ISO File</h4>';
+        html += '<h4 style="margin: 0 0 8px 0; font-size: 14px; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 4px;">ISO File</h4>';
         const sizeStr = formatBytes(image.size);
         const isoDownloadUrl = `/isos/${encodeURIComponent(filename)}`;
         html += `
-            <div style="padding: 8px; margin: 2px 0; border-radius: 4px; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; background: #1e293b;">
+            <div style="padding: 8px; margin: 2px 0; border-radius: 4px; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; background: var(--bg-secondary);">
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <span style="color: #cbd5e1;">💿</span>
-                    <span style="color: #e2e8f0;">${escapeHtml(filename)}</span>
-                    <span style="color: #94a3b8; font-size: 12px;">(${sizeStr})</span>
+                    <span style="color: var(--text-primary);">${escapeHtml(filename)}</span>
+                    <span style="color: var(--text-secondary); font-size: 12px;">(${sizeStr})</span>
                 </div>
                 <a href="${isoDownloadUrl}" class="btn btn-primary btn-sm" download style="padding: 4px 12px; font-size: 12px; white-space: nowrap; text-decoration: none;">Download</a>
             </div>
@@ -2738,23 +2735,23 @@ async function loadPropsImageFiles() {
 
         // 2.5. Extracted Contents Delete Button (only if image is extracted)
         if (image.extracted && isoContents.length > 0) {
-            html += '<div style="background: #1e293b; padding: 15px; border-radius: 6px; margin-bottom: 15px; border: 1px solid #334155;">';
-            html += '<h4 style="margin: 0 0 10px 0; font-size: 14px; color: #60a5fa;">Extracted Contents Management</h4>';
+            html += '<div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px; margin-bottom: 15px; border: 1px solid var(--border);">';
+            html += '<h4 style="margin: 0 0 10px 0; font-size: 14px; color: var(--accent);">Extracted Contents Management</h4>';
             html += '<button class="btn btn-danger btn-sm" onclick="deleteExtractedContents()">Delete Extracted Boot Files</button>';
-            html += '<div style="color: #94a3b8; display: block; margin-top: 8px; font-size: 12px;">This will delete all extracted boot files and reset the image to sanboot mode. The autoinstall folder will be preserved. You can re-extract the ISO afterwards.</div>';
+            html += '<div style="color: var(--text-secondary); display: block; margin-top: 8px; font-size: 12px;">This will delete all extracted boot files and reset the image to sanboot mode. The autoinstall folder will be preserved. You can re-extract the ISO afterwards.</div>';
             html += '</div>';
         }
 
         // 3. Extracted Files Section
         html += '<div>';
-        html += '<h4 style="margin: 0 0 8px 0; font-size: 14px; color: #60a5fa; border-bottom: 1px solid #334155; padding-bottom: 4px;">Extracted Files</h4>';
+        html += '<h4 style="margin: 0 0 8px 0; font-size: 14px; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 4px;">Extracted Files</h4>';
         if (isoContents.length > 0) {
             const tree = buildFSTree(isoContents, '');
             html += renderFSTree(tree, filename, 0, false);
         } else if (image.extracted) {
-            html += '<div style="color: #94a3b8; font-size: 12px; padding: 6px 8px;">Extracted but no files found</div>';
+            html += '<div style="color: var(--text-secondary); font-size: 12px; padding: 6px 8px;">Extracted but no files found</div>';
         } else {
-            html += '<div style="color: #94a3b8; font-size: 12px; padding: 6px 8px;">Not extracted - click "Extract" button to enable kernel boot</div>';
+            html += '<div style="color: var(--text-secondary); font-size: 12px; padding: 6px 8px;">Not extracted - click "Extract" button to enable kernel boot</div>';
         }
         html += '</div>';
 
@@ -2808,7 +2805,7 @@ function renderFSTree(node, filename, level = 0, showDelete = false) {
     });
 
     if (entries.length === 0 && level === 0) {
-        return '<div style="color: #94a3b8; padding: 10px; font-size: 13px;">Empty directory</div>';
+        return '<div style="color: var(--text-secondary); padding: 10px; font-size: 13px;">Empty directory</div>';
     }
 
     const baseDir = filename.replace(/\.[^/.]+$/, '');
@@ -2822,9 +2819,9 @@ function renderFSTree(node, filename, level = 0, showDelete = false) {
             const folderId = 'folder-' + Math.random().toString(36).substr(2, 9);
             html += `
                 <div style="margin-left: ${indent}px;">
-                    <div onclick="toggleFolder('${folderId}')" style="cursor: pointer; padding: 4px 8px; margin: 2px 0; border-radius: 4px; display: flex; align-items: center; gap: 8px; font-size: 13px; user-select: none; color: #94a3b8;" onmouseover="this.style.background='#1e293b'" onmouseout="this.style.background='transparent'">
+                    <div onclick="toggleFolder('${folderId}')" style="cursor: pointer; padding: 4px 8px; margin: 2px 0; border-radius: 4px; display: flex; align-items: center; gap: 8px; font-size: 13px; user-select: none; color: var(--text-secondary);" onmouseover="this.style.background='#1e293b'" onmouseout="this.style.background='transparent'">
                         <span id="${folderId}-icon" style="font-family: monospace; width: 12px; display: inline-block;">▶</span>
-                        <span style="color: #60a5fa;">📁 ${escapeHtml(entry.name)}</span>
+                        <span style="color: var(--accent);">📁 ${escapeHtml(entry.name)}</span>
                     </div>
                     <div id="${folderId}" style="display: none;">
                         ${hasChildren ? renderFSTree(entry, filename, level + 1, showDelete) : ''}
@@ -2836,11 +2833,11 @@ function renderFSTree(node, filename, level = 0, showDelete = false) {
             const sizeStr = entry.size > 0 ? formatBytes(entry.size) : '';
 
             html += `
-                <div style="margin-left: ${indent}px; padding: 6px 8px; margin: 2px 0; border-radius: 4px; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; background: #1e293b;">
+                <div style="margin-left: ${indent}px; padding: 6px 8px; margin: 2px 0; border-radius: 4px; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; background: var(--bg-secondary);">
                     <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
                         <span style="color: #cbd5e1;">📄</span>
-                        <span style="color: #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(entry.name)}</span>
-                        ${sizeStr ? `<span style="color: #64748b; font-size: 11px;">${sizeStr}</span>` : ''}
+                        <span style="color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(entry.name)}</span>
+                        ${sizeStr ? `<span style="color: var(--text-secondary); font-size: 11px;">${sizeStr}</span>` : ''}
                     </div>
                     <div style="display: flex; gap: 6px; flex-shrink: 0;">
                         <a href="${downloadUrl}" class="btn btn-primary btn-sm" download style="padding: 3px 10px; font-size: 11px; white-space: nowrap; text-decoration: none;">Download</a>

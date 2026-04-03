@@ -539,6 +539,25 @@ func (s *PostgresStore) GetImageGroupByName(name string) (*models.ImageGroup, er
 }
 
 func (s *PostgresStore) CreateImageGroup(group *models.ImageGroup) error {
+	// Check for a soft-deleted group with the same name and parent — undelete it
+	var existing models.ImageGroup
+	q := s.db.Unscoped().Where("name = ?", group.Name)
+	if group.ParentID != nil {
+		q = q.Where("parent_id = ?", *group.ParentID)
+	} else {
+		q = q.Where("parent_id IS NULL")
+	}
+	if err := q.Where("deleted_at IS NOT NULL").First(&existing).Error; err == nil {
+		existing.DeletedAt = gorm.DeletedAt{}
+		existing.Description = group.Description
+		existing.Order = group.Order
+		existing.Enabled = group.Enabled
+		if err := s.db.Unscoped().Save(&existing).Error; err != nil {
+			return err
+		}
+		group.ID = existing.ID
+		return nil
+	}
 	return s.db.Create(group).Error
 }
 
@@ -547,7 +566,7 @@ func (s *PostgresStore) UpdateImageGroup(id uint, group *models.ImageGroup) erro
 }
 
 func (s *PostgresStore) DeleteImageGroup(id uint) error {
-	return s.db.Delete(&models.ImageGroup{}, id).Error
+	return s.db.Unscoped().Delete(&models.ImageGroup{}, id).Error
 }
 
 func (s *PostgresStore) ListImagesByGroup(groupID uint) ([]*models.Image, error) {

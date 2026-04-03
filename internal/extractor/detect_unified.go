@@ -44,8 +44,49 @@ func detectDistroNameUnified(reader FileSystemReader, isoPath string) string {
 		"endeavouros": "endeavouros",
 		"garuda":      "garuda",
 		"arco":        "arco",
+		"cachyos":     "arch",
+		"cachy":       "arch",
+		"artix":       "arch",
+		"blackarch":   "arch",
+		"parabola":    "arch",
 		"truenas":     "debian",
 		"proxmox":     "debian",
+		"devuan":      "debian",
+		"antix":       "debian",
+		"mx-":         "debian",
+		"mxlinux":     "debian",
+		"pureos":      "debian",
+		"deepin":      "debian",
+		"lmde":        "debian",
+		"sparky":      "debian",
+		"bunsenlabs":  "debian",
+		"xubuntu":     "ubuntu",
+		"kubuntu":     "ubuntu",
+		"lubuntu":     "ubuntu",
+		"edubuntu":    "ubuntu",
+		"budgie":      "ubuntu",
+		"ubuntumate":  "ubuntu",
+		"ubuntustudio": "ubuntu",
+		"noble":       "ubuntu",
+		"jammy":       "ubuntu",
+		"mageia":      "fedora",
+		"nobara":      "fedora",
+		"ultramarine": "fedora",
+		"eurolinux":   "centos",
+		"springdale":  "centos",
+		"oracle":      "centos",
+		"oraclelinux": "centos",
+		"scientificlinux": "centos",
+		"gentoo":      "gentoo",
+		"calculate":   "gentoo",
+		"void":        "void",
+		"slackware":   "slackware",
+		"solus":       "solus",
+		"steamos":     "arch",
+		"tinycore":    "tinycore",
+		"alpine":      "alpine",
+		"clearlinux":  "clearlinux",
+		"clear-linux": "clearlinux",
 	}
 
 	for pattern, distro := range distroPatterns {
@@ -141,16 +182,36 @@ func (e *Extractor) detectCentOSUnified(reader FileSystemReader) (*BootFiles, er
 }
 
 func (e *Extractor) detectArchUnified(reader FileSystemReader) (*BootFiles, error) {
-	kernel := "/arch/boot/x86_64/vmlinuz-linux"
-	initrd := "/arch/boot/x86_64/initramfs-linux.img"
+	// Standard Arch layout
+	paths := []struct {
+		kernel     string
+		initrd     string
+		bootParams string
+	}{
+		// Standard Arch Linux
+		{"/arch/boot/x86_64/vmlinuz-linux", "/arch/boot/x86_64/initramfs-linux.img", "archisobasedir=arch "},
+		// CachyOS and some Arch derivatives
+		{"/boot/vmlinuz-linux", "/boot/initramfs-linux.img", "archisobasedir=arch "},
+		// EndeavourOS
+		{"/arch/boot/x86_64/vmlinuz-linux", "/arch/boot/x86_64/archiso.img", "archisobasedir=arch "},
+		// Some derivatives use different kernel names
+		{"/boot/vmlinuz-linux-cachyos", "/boot/initramfs-linux-cachyos.img", ""},
+		{"/boot/vmlinuz-linux-zen", "/boot/initramfs-linux-zen.img", ""},
+		{"/boot/vmlinuz-linux-lts", "/boot/initramfs-linux-lts.img", ""},
+		// Manjaro
+		{"/boot/vmlinuz-x86_64", "/boot/initramfs-x86_64.img", ""},
+		{"/manjaro/boot/x86_64/manjaro", "/manjaro/boot/x86_64/manjaro.img", ""},
+	}
 
-	if reader.FileExists(kernel) && reader.FileExists(initrd) {
-		return &BootFiles{
-			Kernel:     kernel,
-			Initrd:     initrd,
-			Distro:     "arch",
-			BootParams: "archisobasedir=arch ",
-		}, nil
+	for _, p := range paths {
+		if reader.FileExists(p.kernel) && reader.FileExists(p.initrd) {
+			return &BootFiles{
+				Kernel:     p.kernel,
+				Initrd:     p.initrd,
+				Distro:     "arch",
+				BootParams: p.bootParams,
+			}, nil
+		}
 	}
 
 	return nil, fmt.Errorf("not Arch Linux")
@@ -202,6 +263,124 @@ func (e *Extractor) detectOpenSUSEUnified(reader FileSystemReader) (*BootFiles, 
 
 func (e *Extractor) detectNixOSUnified(reader FileSystemReader) (*BootFiles, error) {
 	return nil, fmt.Errorf("not NixOS")
+}
+
+func (e *Extractor) detectAlpineUnified(reader FileSystemReader) (*BootFiles, error) {
+	paths := []struct {
+		kernel     string
+		initrd     string
+		bootParams string
+	}{
+		{"/boot/vmlinuz-lts", "/boot/initramfs-lts", "modules=loop,squashfs,sd-mod,usb-storage quiet "},
+		{"/boot/vmlinuz-virt", "/boot/initramfs-virt", "modules=loop,squashfs,sd-mod,usb-storage quiet "},
+		{"/boot/vmlinuz", "/boot/initramfs-init", "modules=loop,squashfs,sd-mod,usb-storage quiet "},
+	}
+	for _, p := range paths {
+		if reader.FileExists(p.kernel) && reader.FileExists(p.initrd) {
+			return &BootFiles{Kernel: p.kernel, Initrd: p.initrd, Distro: "alpine", BootParams: p.bootParams}, nil
+		}
+	}
+	return nil, fmt.Errorf("not Alpine Linux")
+}
+
+func (e *Extractor) detectGentooUnified(reader FileSystemReader) (*BootFiles, error) {
+	paths := []struct {
+		kernel     string
+		initrd     string
+		bootParams string
+	}{
+		{"/boot/gentoo", "/boot/gentoo.igz", "root=/dev/ram0 init=/linuxrc looptype=squashfs loop=/image.squashfs cdroot "},
+		{"/boot/vmlinuz", "/boot/initrd", "root=/dev/ram0 init=/linuxrc looptype=squashfs loop=/image.squashfs cdroot "},
+		{"/isolinux/gentoo", "/isolinux/gentoo.igz", "root=/dev/ram0 init=/linuxrc looptype=squashfs loop=/image.squashfs cdroot "},
+		{"/boot/gentoo64", "/boot/gentoo64.igz", "root=/dev/ram0 init=/linuxrc looptype=squashfs loop=/image.squashfs cdroot "},
+	}
+	for _, p := range paths {
+		if reader.FileExists(p.kernel) && reader.FileExists(p.initrd) {
+			return &BootFiles{Kernel: p.kernel, Initrd: p.initrd, Distro: "gentoo", BootParams: p.bootParams}, nil
+		}
+	}
+	return nil, fmt.Errorf("not Gentoo")
+}
+
+func (e *Extractor) detectVoidUnified(reader FileSystemReader) (*BootFiles, error) {
+	paths := []struct {
+		kernel string
+		initrd string
+	}{
+		{"/boot/vmlinuz", "/boot/initrd"},
+		{"/live/vmlinuz", "/live/initrd"},
+	}
+	for _, p := range paths {
+		if reader.FileExists(p.kernel) && reader.FileExists(p.initrd) {
+			return &BootFiles{Kernel: p.kernel, Initrd: p.initrd, Distro: "void", BootParams: "boot=live "}, nil
+		}
+	}
+	return nil, fmt.Errorf("not Void Linux")
+}
+
+func (e *Extractor) detectSlackwareUnified(reader FileSystemReader) (*BootFiles, error) {
+	paths := []struct {
+		kernel string
+		initrd string
+	}{
+		{"/kernels/huge.s/bzImage", "/isolinux/initrd.img"},
+		{"/kernels/hugesmp.s/bzImage", "/isolinux/initrd.img"},
+		{"/boot/vmlinuz", "/boot/initrd.img"},
+	}
+	for _, p := range paths {
+		if reader.FileExists(p.kernel) && reader.FileExists(p.initrd) {
+			return &BootFiles{Kernel: p.kernel, Initrd: p.initrd, Distro: "slackware"}, nil
+		}
+	}
+	return nil, fmt.Errorf("not Slackware")
+}
+
+func (e *Extractor) detectSolusUnified(reader FileSystemReader) (*BootFiles, error) {
+	paths := []struct {
+		kernel string
+		initrd string
+	}{
+		{"/boot/kernel.current", "/boot/initrd.current"},
+		{"/boot/vmlinuz", "/boot/initrd"},
+	}
+	for _, p := range paths {
+		if reader.FileExists(p.kernel) && reader.FileExists(p.initrd) {
+			return &BootFiles{Kernel: p.kernel, Initrd: p.initrd, Distro: "solus", BootParams: "root=live "}, nil
+		}
+	}
+	return nil, fmt.Errorf("not Solus")
+}
+
+func (e *Extractor) detectTinyCoreUnified(reader FileSystemReader) (*BootFiles, error) {
+	paths := []struct {
+		kernel string
+		initrd string
+	}{
+		{"/boot/vmlinuz", "/boot/core.gz"},
+		{"/boot/vmlinuz64", "/boot/corepure64.gz"},
+	}
+	for _, p := range paths {
+		if reader.FileExists(p.kernel) && reader.FileExists(p.initrd) {
+			return &BootFiles{Kernel: p.kernel, Initrd: p.initrd, Distro: "tinycore"}, nil
+		}
+	}
+	return nil, fmt.Errorf("not Tiny Core Linux")
+}
+
+func (e *Extractor) detectClearLinuxUnified(reader FileSystemReader) (*BootFiles, error) {
+	paths := []struct {
+		kernel string
+		initrd string
+	}{
+		{"/kernel/kernel.org.clearlinux.native", "/initrd/initrd.img.clearlinux.native"},
+		{"/EFI/org.clearlinux/kernel.org.clearlinux.native", "/EFI/org.clearlinux/initrd"},
+	}
+	for _, p := range paths {
+		if reader.FileExists(p.kernel) && reader.FileExists(p.initrd) {
+			return &BootFiles{Kernel: p.kernel, Initrd: p.initrd, Distro: "clearlinux"}, nil
+		}
+	}
+	return nil, fmt.Errorf("not Clear Linux")
 }
 
 func (e *Extractor) detectWindowsUnified(reader FileSystemReader) (*BootFiles, error) {

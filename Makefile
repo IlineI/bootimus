@@ -38,8 +38,8 @@ build:
 	@echo "Building bootimus $(VERSION)..."
 	CGO_ENABLED=1 go build -ldflags="$(LDFLAGS)" -o $(BINARY) .
 
-run: build
-	./$(BINARY) serve
+run:
+	CGO_ENABLED=1 go run -ldflags="$(LDFLAGS)" . serve
 
 clean:
 	rm -f bootimus bootimus-*

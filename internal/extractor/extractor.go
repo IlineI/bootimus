@@ -240,6 +240,47 @@ func detectDistroName(img *iso9660.Image, isoPath string) string {
 		"endeavouros": "endeavouros",
 		"garuda":      "garuda",
 		"arco":        "arco",
+		"cachyos":     "arch",
+		"cachy":       "arch",
+		"artix":       "arch",
+		"blackarch":   "arch",
+		"parabola":    "arch",
+		"devuan":      "debian",
+		"antix":       "debian",
+		"mx-":         "debian",
+		"mxlinux":     "debian",
+		"pureos":      "debian",
+		"deepin":      "debian",
+		"lmde":        "debian",
+		"sparky":      "debian",
+		"bunsenlabs":  "debian",
+		"xubuntu":     "ubuntu",
+		"kubuntu":     "ubuntu",
+		"lubuntu":     "ubuntu",
+		"edubuntu":    "ubuntu",
+		"budgie":      "ubuntu",
+		"ubuntumate":  "ubuntu",
+		"ubuntustudio": "ubuntu",
+		"noble":       "ubuntu",
+		"jammy":       "ubuntu",
+		"mageia":      "fedora",
+		"nobara":      "fedora",
+		"ultramarine": "fedora",
+		"eurolinux":   "centos",
+		"springdale":  "centos",
+		"oracle":      "centos",
+		"oraclelinux": "centos",
+		"scientificlinux": "centos",
+		"gentoo":      "gentoo",
+		"calculate":   "gentoo",
+		"void":        "void",
+		"slackware":   "slackware",
+		"solus":       "solus",
+		"steamos":     "arch",
+		"tinycore":    "tinycore",
+		"alpine":      "alpine",
+		"clearlinux":  "clearlinux",
+		"clear-linux": "clearlinux",
 	}
 
 	for pattern, distro := range distroPatterns {
@@ -980,6 +1021,13 @@ func (e *Extractor) detectAndExtractUnified(reader FileSystemReader, isoPath str
 		{"FreeBSD", e.detectFreeBSDUnified},
 		{"OpenSUSE", e.detectOpenSUSEUnified},
 		{"NixOS", e.detectNixOSUnified},
+		{"Alpine", e.detectAlpineUnified},
+		{"Gentoo", e.detectGentooUnified},
+		{"Void", e.detectVoidUnified},
+		{"Slackware", e.detectSlackwareUnified},
+		{"Solus", e.detectSolusUnified},
+		{"TinyCore", e.detectTinyCoreUnified},
+		{"ClearLinux", e.detectClearLinuxUnified},
 	}
 
 	var errors []string
@@ -995,6 +1043,21 @@ func (e *Extractor) detectAndExtractUnified(reader FileSystemReader, isoPath str
 		} else {
 			errors = append(errors, fmt.Sprintf("%s: %v", d.name, err))
 		}
+	}
+
+	// Fallback: generic scanner that walks the filesystem looking for kernel/initrd
+	log.Printf("No known distro layout matched, trying generic boot file scanner...")
+	if files, err := e.detectGenericUnified(reader); err == nil && files != nil {
+		if distroName != "" {
+			files.Distro = distroName
+		}
+		if err := e.cacheBootFilesUnified(files, reader, isoPath); err != nil {
+			return nil, err
+		}
+		log.Printf("Generic scanner succeeded: kernel=%s initrd=%s", files.Kernel, files.Initrd)
+		return files, nil
+	} else {
+		errors = append(errors, fmt.Sprintf("Generic scanner: %v", err))
 	}
 
 	return nil, fmt.Errorf("unsupported distribution or unable to find boot files (tried: %s)", strings.Join(errors, "; "))

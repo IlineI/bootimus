@@ -389,7 +389,7 @@ func (s *Server) Shutdown() error {
 	log.Println("Initiating graceful shutdown...")
 
 	if s.httpServer != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
 		if err := s.httpServer.Shutdown(ctx); err != nil {
 			log.Printf("HTTP server shutdown error: %v", err)
@@ -399,7 +399,7 @@ func (s *Server) Shutdown() error {
 	}
 
 	if s.adminServer != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
 		if err := s.adminServer.Shutdown(ctx); err != nil {
 			log.Printf("Admin server shutdown error: %v", err)
@@ -409,22 +409,11 @@ func (s *Server) Shutdown() error {
 	}
 
 	if s.tftpServer != nil {
-		log.Println("TFTP server will stop after current transfers complete")
+		s.tftpServer.Shutdown()
+		log.Println("TFTP server stopped")
 	}
 
-	done := make(chan struct{})
-	go func() {
-		s.wg.Wait()
-		close(done)
-	}()
-
-	select {
-	case <-done:
-		log.Println("All servers stopped gracefully")
-	case <-time.After(10 * time.Second):
-		log.Println("Shutdown timeout reached (10s) - forcing shutdown")
-		log.Println("Some goroutines may not have completed cleanly")
-	}
+	log.Println("Shutdown complete")
 
 	return nil
 }

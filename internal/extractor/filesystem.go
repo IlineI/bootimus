@@ -13,6 +13,12 @@ type FileSystemReader interface {
 	ExtractFile(isoPath, destPath string) error
 	ExtractAll(destDir string) error
 	ReadFileContent(path string) string
+	ListDirectory(path string) ([]DirEntry, error)
+}
+
+type DirEntry struct {
+	Name  string
+	IsDir bool
 }
 
 type ISO9660Reader struct {
@@ -36,6 +42,25 @@ func (r *ISO9660Reader) ReadFileContent(path string) string {
 	return readFileContent(r.img, path)
 }
 
+func (r *ISO9660Reader) ListDirectory(path string) ([]DirEntry, error) {
+	file, err := findFile(r.img, path)
+	if err != nil {
+		return nil, err
+	}
+	if !file.IsDir() {
+		return nil, nil
+	}
+	children, err := safeGetChildren(file)
+	if err != nil {
+		return nil, err
+	}
+	var entries []DirEntry
+	for _, c := range children {
+		entries = append(entries, DirEntry{Name: c.Name(), IsDir: c.IsDir()})
+	}
+	return entries, nil
+}
+
 type UDFReader struct {
 	reader  *udf.Reader
 	extract *Extractor
@@ -51,6 +76,25 @@ func (r *UDFReader) ExtractFile(isoPath, destPath string) error {
 
 func (r *UDFReader) ExtractAll(destDir string) error {
 	return r.extract.extractUDFContents(r.reader, destDir)
+}
+
+func (r *UDFReader) ListDirectory(path string) ([]DirEntry, error) {
+	file, err := findFileUDF(r.reader, path)
+	if err != nil {
+		return nil, err
+	}
+	if !file.IsDir() {
+		return nil, nil
+	}
+	children, err := file.ReadDir()
+	if err != nil {
+		return nil, err
+	}
+	var entries []DirEntry
+	for _, c := range children {
+		entries = append(entries, DirEntry{Name: c.Name(), IsDir: c.IsDir()})
+	}
+	return entries, nil
 }
 
 func (r *UDFReader) ReadFileContent(path string) string {
