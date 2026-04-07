@@ -39,7 +39,8 @@ type ProfileData struct {
 }
 
 type Manager struct {
-	store storage.Storage
+	store              storage.Storage
+	DisableRemoteCheck bool
 }
 
 func NewManager(store storage.Storage) *Manager {
@@ -96,6 +97,9 @@ func (m *Manager) SeedProfiles() error {
 // UpdateFromRemote fetches the latest profiles from the GitHub repo and updates the database.
 // Only updates built-in profiles — custom profiles are never touched.
 func (m *Manager) UpdateFromRemote() (added int, updated int, version string, err error) {
+	if m.DisableRemoteCheck {
+		return 0, 0, "", fmt.Errorf("remote profile updates are disabled")
+	}
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Get(RemoteProfilesURL)
 	if err != nil {

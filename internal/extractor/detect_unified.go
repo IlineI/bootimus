@@ -383,6 +383,21 @@ func (e *Extractor) detectClearLinuxUnified(reader FileSystemReader) (*BootFiles
 	return nil, fmt.Errorf("not Clear Linux")
 }
 
+func (e *Extractor) detectSystemRescueUnified(reader FileSystemReader) (*BootFiles, error) {
+	kernel := "/sysresccd/boot/x86_64/vmlinuz"
+	initrd := "/sysresccd/boot/intel_ucode.img"
+
+	if reader.FileExists(kernel) && reader.FileExists(initrd) {
+		return &BootFiles{
+			Kernel: kernel,
+			Initrd: initrd,
+			Distro: "systemrescue",
+		}, nil
+	}
+
+	return nil, fmt.Errorf("not SystemRescue")
+}
+
 func (e *Extractor) detectWindowsUnified(reader FileSystemReader) (*BootFiles, error) {
 	bcdPaths := []string{
 		"/boot/bcd",

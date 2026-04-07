@@ -171,8 +171,12 @@ func runServe(cmd *cobra.Command, args []string) {
 	}
 
 	profileMgr := profiles.NewManager(store)
+	profileMgr.DisableRemoteCheck = viper.GetBool("disable_remote_profiles")
 	if err := profileMgr.SeedProfiles(); err != nil {
 		log.Printf("Warning: Failed to seed distro profiles: %v", err)
+	}
+	if profileMgr.DisableRemoteCheck {
+		log.Println("Remote distro profile updates disabled")
 	}
 
 	cfg := &server.Config{

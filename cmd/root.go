@@ -61,6 +61,8 @@ func init() {
 	rootCmd.PersistentFlags().String("ldap-group-filter", "", "LDAP group filter for admin access (optional)")
 	rootCmd.PersistentFlags().String("ldap-group-base-dn", "", "LDAP base DN for group search")
 
+	rootCmd.PersistentFlags().Bool("disable-remote-profiles", false, "Disable remote distro profile updates")
+
 	viper.BindPFlag("tftp_port", rootCmd.PersistentFlags().Lookup("tftp-port"))
 	viper.BindPFlag("tftp_single_port", rootCmd.PersistentFlags().Lookup("tftp-single-port"))
 	viper.BindPFlag("http_port", rootCmd.PersistentFlags().Lookup("http-port"))
@@ -87,6 +89,8 @@ func init() {
 	viper.BindPFlag("ldap.user_filter", rootCmd.PersistentFlags().Lookup("ldap-user-filter"))
 	viper.BindPFlag("ldap.group_filter", rootCmd.PersistentFlags().Lookup("ldap-group-filter"))
 	viper.BindPFlag("ldap.group_base_dn", rootCmd.PersistentFlags().Lookup("ldap-group-base-dn"))
+
+	viper.BindPFlag("disable_remote_profiles", rootCmd.PersistentFlags().Lookup("disable-remote-profiles"))
 }
 
 func initConfig() {

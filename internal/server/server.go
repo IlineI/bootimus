@@ -367,6 +367,18 @@ func (as *ActiveSessions) Remove(ip string) {
 	delete(as.sessions, ip)
 }
 
+func (as *ActiveSessions) CleanupStale(maxAge time.Duration) {
+	as.mu.Lock()
+	defer as.mu.Unlock()
+	now := time.Now()
+	for ip, session := range as.sessions {
+		if now.Sub(session.StartedAt) > maxAge {
+			log.Printf("Cleaning up stale session: %s downloading %s (started %v ago)", ip, session.Filename, now.Sub(session.StartedAt).Round(time.Second))
+			delete(as.sessions, ip)
+		}
+	}
+}
+
 func (as *ActiveSessions) GetAll() []ActiveSession {
 	as.mu.RLock()
 	defer as.mu.RUnlock()
@@ -434,6 +446,15 @@ func (s *Server) Start() error {
 		defer s.wg.Done()
 		if err := s.startAdminServer(); err != nil {
 			log.Printf("Admin server error: %v", err)
+		}
+	}()
+
+	// Periodically clean up stale active sessions
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			s.activeSessions.CleanupStale(30 * time.Minute)
 		}
 	}()
 
@@ -763,6 +784,11 @@ func (s *Server) startHTTPServer() error {
 
 		w.Header().Set("Content-Type", "application/octet-stream")
 		http.ServeFile(wrappedWriter, r, fullPath)
+
+		// Clean up session when handler exits (client disconnect or completion)
+		if rangeHeader == "" {
+			s.activeSessions.Remove(r.RemoteAddr)
+		}
 	})
 
 	mux.HandleFunc("/boot/", func(w http.ResponseWriter, r *http.Request) {

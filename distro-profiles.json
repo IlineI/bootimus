@@ -1,5 +1,5 @@
 {
-  "version": "0.1.25",
+  "version": "0.1.26",
   "profiles": [
     {
       "id": "ubuntu",
@@ -273,6 +273,17 @@
       "initrd_paths": ["/initrd/initrd.xz", "/EFI/BOOT/initrd.xz"],
       "squashfs_paths": [],
       "default_boot_params": "",
+      "auto_install_type": ""
+    },
+    {
+      "id": "systemrescue",
+      "display_name": "SystemRescue",
+      "family": "arch",
+      "filename_patterns": ["systemrescue", "sysresccd", "sysrescue"],
+      "kernel_paths": ["/sysresccd/boot/x86_64/vmlinuz"],
+      "initrd_paths": ["/sysresccd/boot/intel_ucode.img"],
+      "squashfs_paths": ["/sysresccd/x86_64/airootfs.sfs"],
+      "default_boot_params": "archisobasedir=sysresccd archiso_http_srv={{BASE_URL}}/boot/{{CACHE_DIR}}/iso/ checksum ip=:::::eth0:dhcp",
       "auto_install_type": ""
     }
   ]

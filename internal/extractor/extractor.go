@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -79,11 +80,119 @@ func (e *Extractor) Extract(isoPath string) (*BootFiles, error) {
 	log.Printf("ISO9660 extraction failed (%v), trying UDF method", err)
 
 	bootFiles, err = e.extractViaUDF(isoPath)
-	if err != nil {
-		return nil, fmt.Errorf("both ISO9660 and UDF extraction failed: %w", err)
+	if err == nil {
+		return bootFiles, nil
 	}
 
+	log.Printf("Both ISO9660 and UDF failed, trying bsdtar fallback extraction")
+	bootFiles, bsdtarErr := e.extractViaBsdtar(isoPath)
+	if bsdtarErr != nil {
+		return nil, fmt.Errorf("all extraction methods failed (ISO9660, UDF, bsdtar): %w", bsdtarErr)
+	}
 	return bootFiles, nil
+}
+
+func (e *Extractor) extractViaBsdtar(isoPath string) (*BootFiles, error) {
+	bsdtarPath, err := exec.LookPath("bsdtar")
+	if err != nil {
+		return nil, fmt.Errorf("bsdtar not available: %w", err)
+	}
+
+	filename := filepath.Base(isoPath)
+	isoBase := strings.TrimSuffix(filename, filepath.Ext(filename))
+	extractDir := filepath.Join(e.dataDir, "isos", isoBase, "iso")
+
+	if err := os.MkdirAll(extractDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create extraction dir: %w", err)
+	}
+
+	log.Printf("bsdtar: Extracting %s to %s", filename, extractDir)
+	cmd := exec.Command(bsdtarPath, "-xf", isoPath, "-C", extractDir)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return nil, fmt.Errorf("bsdtar failed: %w (%s)", err, strings.TrimSpace(string(output)))
+	}
+
+	// Scan for kernel, initrd, squashfs
+	bootPaths := []struct{ kernel, initrd, squashfs string }{
+		{"casper/vmlinuz", "casper/initrd", "casper/filesystem.squashfs"},
+		{"casper/vmlinuz.efi", "casper/initrd.lz", "casper/filesystem.squashfs"},
+		{"casper/vmlinuz", "casper/initrd.lz", "casper/filesystem.squashfs"},
+		{"casper/vmlinuz", "casper/initrd.gz", "casper/filesystem.squashfs"},
+		{"live/vmlinuz", "live/initrd.img", "live/filesystem.squashfs"},
+		{"boot/vmlinuz-linux", "boot/initramfs-linux.img", ""},
+		{"arch/boot/x86_64/vmlinuz-linux", "arch/boot/x86_64/initramfs-linux.img", ""},
+		{"images/pxeboot/vmlinuz", "images/pxeboot/initrd.img", ""},
+		{"boot/x86_64/loader/linux", "boot/x86_64/loader/initrd", ""},
+	}
+
+	baseDir := filepath.Join(e.dataDir, "isos", isoBase)
+	for _, bp := range bootPaths {
+		kPath := filepath.Join(extractDir, bp.kernel)
+		iPath := filepath.Join(extractDir, bp.initrd)
+		if fileExistsOnDisk(kPath) && fileExistsOnDisk(iPath) {
+			// Copy kernel and initrd to expected locations
+			kernelDest := filepath.Join(baseDir, "vmlinuz")
+			initrdDest := filepath.Join(baseDir, "initrd")
+
+			copyFile := func(src, dst string) error {
+				in, err := os.Open(src)
+				if err != nil {
+					return err
+				}
+				defer in.Close()
+				out, err := os.Create(dst)
+				if err != nil {
+					return err
+				}
+				defer out.Close()
+				_, err = io.Copy(out, in)
+				return err
+			}
+
+			if err := copyFile(kPath, kernelDest); err != nil {
+				return nil, fmt.Errorf("failed to copy kernel: %w", err)
+			}
+			if err := copyFile(iPath, initrdDest); err != nil {
+				return nil, fmt.Errorf("failed to copy initrd: %w", err)
+			}
+
+			squashfs := ""
+			if bp.squashfs != "" && fileExistsOnDisk(filepath.Join(extractDir, bp.squashfs)) {
+				squashfs = "iso/" + bp.squashfs
+			}
+
+			distro := detectDistroFromFilename(filename)
+
+			log.Printf("bsdtar: Found kernel=%s initrd=%s squashfs=%s distro=%s", bp.kernel, bp.initrd, squashfs, distro)
+			return &BootFiles{
+				Kernel:       kernelDest,
+				Initrd:       initrdDest,
+				Distro:       distro,
+				SquashfsPath: squashfs,
+			}, nil
+		}
+	}
+
+	return nil, fmt.Errorf("bsdtar extracted files but no kernel/initrd found")
+}
+
+func detectDistroFromFilename(filename string) string {
+	lower := strings.ToLower(filename)
+	patterns := map[string]string{
+		"ubuntu": "ubuntu", "debian": "debian", "mint": "mint", "popos": "popos",
+		"pop-os": "popos", "elementary": "elementary", "zorin": "zorin",
+		"arch": "arch", "cachyos": "arch", "endeavouros": "arch", "manjaro": "manjaro",
+		"fedora": "fedora", "centos": "centos", "rocky": "fedora", "alma": "fedora",
+		"nixos": "nixos", "opensuse": "opensuse", "alpine": "alpine", "gentoo": "gentoo",
+		"void": "void", "slackware": "slackware", "freebsd": "freebsd",
+		"proxmox": "debian", "truenas": "debian", "kali": "kali", "parrot": "parrot",
+	}
+	for pattern, distro := range patterns {
+		if strings.Contains(lower, pattern) {
+			return distro
+		}
+	}
+	return ""
 }
 
 func detectISOFormat(isoPath string) (bool, error) {
@@ -479,8 +588,7 @@ func findKernelInitrd(img *iso9660.Image, dir, kernelPrefix, initrdPrefix string
 		}
 	}
 
-	log.Printf("Files in %s: %v", dir, fileNames)
-	log.Printf("No matching kernel/initrd found (kernel='%s', initrd='%s')", kernel, initrd)
+	log.Printf("No matching kernel/initrd found in %s", dir)
 	return nil
 }
 
@@ -879,7 +987,26 @@ func (e *Extractor) SaveMetadata(isoFilename string, files *BootFiles) error {
 
 func fileExists(img *iso9660.Image, path string) bool {
 	_, err := findFile(img, path)
-	return err == nil
+	if err == nil {
+		return true
+	}
+	// Fallback: list parent directory and try fuzzy matching
+	dir := filepath.Dir(path)
+	base := strings.ToLower(filepath.Base(path))
+	parentFile, err := findFile(img, dir)
+	if err != nil || !parentFile.IsDir() {
+		return false
+	}
+	children, err := safeGetChildren(parentFile)
+	if err != nil {
+		return false
+	}
+	for _, child := range children {
+		if strings.ToLower(child.Name()) == base {
+			return true
+		}
+	}
+	return false
 }
 
 func fileExistsOnDisk(path string) bool {
@@ -910,30 +1037,39 @@ func findFile(img *iso9660.Image, path string) (*iso9660.File, error) {
 			return nil, fmt.Errorf("failed to get children: %w", err)
 		}
 
-		var childNames []string
-		for _, child := range children {
-			childNames = append(childNames, child.Name())
-		}
-		log.Printf("Looking for '%s' in directory, found children: %v", part, childNames)
-
 		found := false
 		for _, child := range children {
 			if strings.EqualFold(child.Name(), part) {
-				log.Printf("Matched '%s' with '%s'", part, child.Name())
 				current = child
 				found = true
 				break
 			}
 		}
 
-		// ISO9660 Level 1 replaces dots with underscores in directory names,
-		// so try matching with that substitution if exact match failed.
+		// ISO9660 names may have version suffixes (;1), underscores instead of dots,
+		// or be truncated. Try progressively looser matching.
 		if !found {
-			normalizedPart := strings.ToUpper(strings.ReplaceAll(part, ".", "_"))
+			partUpper := strings.ToUpper(part)
 			for _, child := range children {
-				normalizedChild := strings.ToUpper(strings.ReplaceAll(child.Name(), ".", "_"))
+				childName := child.Name()
+				// Strip version suffix (e.g. "INITRD;1" -> "INITRD")
+				cleanName := strings.Split(childName, ";")[0]
+				// Try case-insensitive with stripped suffix
+				if strings.EqualFold(cleanName, part) {
+					current = child
+					found = true
+					break
+				}
+				// Try with dots replaced by underscores
+				normalizedChild := strings.ToUpper(strings.ReplaceAll(cleanName, ".", "_"))
+				normalizedPart := strings.ToUpper(strings.ReplaceAll(part, ".", "_"))
 				if normalizedChild == normalizedPart {
-					log.Printf("Matched '%s' with '%s' (ISO9660 name normalization)", part, child.Name())
+					current = child
+					found = true
+					break
+				}
+				// Try prefix match for truncated names
+				if len(partUpper) > 8 && strings.HasPrefix(partUpper, strings.ToUpper(cleanName)) {
 					current = child
 					found = true
 					break
@@ -942,7 +1078,6 @@ func findFile(img *iso9660.Image, path string) (*iso9660.File, error) {
 		}
 
 		if !found {
-			log.Printf("Path component '%s' not found in %v", part, childNames)
 			return nil, fmt.Errorf("path not found: %s (missing: %s)", path, part)
 		}
 
@@ -1029,6 +1164,7 @@ func (e *Extractor) detectAndExtractUnified(reader FileSystemReader, isoPath str
 		{"Solus", e.detectSolusUnified},
 		{"TinyCore", e.detectTinyCoreUnified},
 		{"ClearLinux", e.detectClearLinuxUnified},
+		{"SystemRescue", e.detectSystemRescueUnified},
 	}
 
 	var errors []string
