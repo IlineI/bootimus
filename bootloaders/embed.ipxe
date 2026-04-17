@@ -1,4 +1,15 @@
 #!ipxe
 dhcp
-chain http://${next-server}:8080/menu.ipxe?mac=${net0/mac} ||
-chain tftp://${next-server}/autoexec.ipxe || shell
+
+# Proxy DHCP aware: prefer the TFTP server (DHCP option 66 = tftp-server-name),
+# which points to Bootimus even when the DHCP server (${next-server}) is a
+# separate proxy (e.g. dnsmasq). Fetching autoexec.ipxe via TFTP avoids any
+# hardcoded HTTP port — Bootimus serves a dynamic script with the correct
+# URLs (respecting BOOTIMUS_SERVER_ADDR and BOOTIMUS_HTTP_PORT).
+
+set boot-server ${66:string}
+isset ${boot-server} || set boot-server ${next-server}
+
+chain tftp://${boot-server}/autoexec.ipxe ||
+chain tftp://${next-server}/autoexec.ipxe ||
+shell

@@ -63,6 +63,11 @@ func init() {
 
 	rootCmd.PersistentFlags().Bool("disable-remote-profiles", false, "Disable remote distro profile updates")
 
+	rootCmd.PersistentFlags().Bool("proxy-dhcp", false, "Enable in-process proxyDHCP server (answers PXE requests without handing out IPs; requires root or CAP_NET_BIND_SERVICE)")
+	rootCmd.PersistentFlags().String("proxy-dhcp-bootfile-bios", "undionly.kpxe", "Bootfile advertised to legacy BIOS PXE clients")
+	rootCmd.PersistentFlags().String("proxy-dhcp-bootfile-uefi", "bootimus.efi", "Bootfile advertised to UEFI x64 PXE clients")
+	rootCmd.PersistentFlags().String("proxy-dhcp-bootfile-arm64", "bootimus-arm64.efi", "Bootfile advertised to UEFI ARM64 PXE clients")
+
 	viper.BindPFlag("tftp_port", rootCmd.PersistentFlags().Lookup("tftp-port"))
 	viper.BindPFlag("tftp_single_port", rootCmd.PersistentFlags().Lookup("tftp-single-port"))
 	viper.BindPFlag("http_port", rootCmd.PersistentFlags().Lookup("http-port"))
@@ -91,6 +96,11 @@ func init() {
 	viper.BindPFlag("ldap.group_base_dn", rootCmd.PersistentFlags().Lookup("ldap-group-base-dn"))
 
 	viper.BindPFlag("disable_remote_profiles", rootCmd.PersistentFlags().Lookup("disable-remote-profiles"))
+
+	viper.BindPFlag("proxy_dhcp.enabled", rootCmd.PersistentFlags().Lookup("proxy-dhcp"))
+	viper.BindPFlag("proxy_dhcp.bootfile_bios", rootCmd.PersistentFlags().Lookup("proxy-dhcp-bootfile-bios"))
+	viper.BindPFlag("proxy_dhcp.bootfile_uefi", rootCmd.PersistentFlags().Lookup("proxy-dhcp-bootfile-uefi"))
+	viper.BindPFlag("proxy_dhcp.bootfile_arm64", rootCmd.PersistentFlags().Lookup("proxy-dhcp-bootfile-arm64"))
 }
 
 func initConfig() {

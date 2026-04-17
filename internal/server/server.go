@@ -27,6 +27,7 @@ import (
 	"bootimus/internal/models"
 	"bootimus/internal/nbd"
 	"bootimus/internal/profiles"
+	"bootimus/internal/proxydhcp"
 	"bootimus/internal/storage"
 	"bootimus/internal/tools"
 	"bootimus/web"
@@ -75,6 +76,15 @@ type Config struct {
 	NBDPort           int
 	WOLBroadcastAddr  string
 	ProfileManager    *profiles.Manager
+
+	// ProxyDHCPEnabled turns on an in-process proxyDHCP server that answers
+	// PXE boot requests without handing out IPs. Requires root or
+	// CAP_NET_BIND_SERVICE to bind UDP/67. Off by default so bootimus
+	// doesn't collide with an existing dnsmasq on the same network.
+	ProxyDHCPEnabled      bool
+	ProxyDHCPBootfileBIOS string
+	ProxyDHCPBootfileUEFI string
+	ProxyDHCPBootfileARM  string
 }
 
 type Server struct {
@@ -82,6 +92,7 @@ type Server struct {
 	httpServer         *http.Server
 	adminServer        *http.Server
 	tftpServer         *tftp.Server
+	proxyDHCPServer    *proxydhcp.Server
 	wg                 sync.WaitGroup
 	activeSessions     *ActiveSessions
 	logBroadcaster     *LogBroadcaster
@@ -470,6 +481,22 @@ func (s *Server) Start() error {
 		}()
 	}
 
+	if s.config.ProxyDHCPEnabled {
+		pd, err := proxydhcp.NewServer(proxydhcp.Config{
+			ServerIP:      net.ParseIP(s.config.ServerAddr),
+			BootfileBIOS:  s.config.ProxyDHCPBootfileBIOS,
+			BootfileUEFI:  s.config.ProxyDHCPBootfileUEFI,
+			BootfileARM64: s.config.ProxyDHCPBootfileARM,
+		})
+		if err != nil {
+			log.Printf("proxyDHCP: failed to construct server: %v", err)
+		} else if err := pd.Start(); err != nil {
+			log.Printf("proxyDHCP: failed to start: %v", err)
+		} else {
+			s.proxyDHCPServer = pd
+		}
+	}
+
 	return nil
 }
 
@@ -503,6 +530,14 @@ func (s *Server) Shutdown() error {
 	if s.tftpServer != nil {
 		s.tftpServer.Shutdown()
 		log.Println("TFTP server stopped")
+	}
+
+	if s.proxyDHCPServer != nil {
+		if err := s.proxyDHCPServer.Shutdown(); err != nil {
+			log.Printf("proxyDHCP server shutdown error: %v", err)
+		} else {
+			log.Println("proxyDHCP server stopped")
+		}
 	}
 
 	log.Println("Shutdown complete")
@@ -903,7 +938,7 @@ func (s *Server) startAdminServer() error {
 func (s *Server) setupAdminInterface(mux *http.ServeMux) {
 	log.Println("Setting up admin interface")
 
-	adminHandler := admin.NewHandler(s.config.Storage, s.config.DataDir, s.config.ISODir, s.config.BootDir, Version, s, s.toolsManager, s.config.WOLBroadcastAddr, s.config.ProfileManager)
+	adminHandler := admin.NewHandler(s.config.Storage, s.config.DataDir, s.config.ISODir, s.config.BootDir, Version, s, s.toolsManager, s.config.WOLBroadcastAddr, s.config.ProfileManager, s.config.ProxyDHCPEnabled)
 
 	staticFS, err := fs.Sub(web.Static, "static")
 	if err != nil {
@@ -1309,13 +1344,7 @@ goto ${selected}
 {{range $index, $img := .Images}}
 :iso{{$index}}
 echo Booting {{$img.Name}}...
-{{if eq $img.BootMethod "memdisk"}}
-echo Using Thin OS memdisk loader...
-kernel http://{{$.ServerAddr}}:{{$.HTTPPort}}/thinos-kernel
-initrd http://{{$.ServerAddr}}:{{$.HTTPPort}}/thinos-initrd.gz
-imgargs thinos-kernel ISO_NAME={{$img.EncodedFilename}} BOOTIMUS_SERVER={{$.ServerAddr}} console=tty0 console=ttyS0,115200n8 earlyprintk=vga,keep debug loglevel=8 rdinit=/init
-boot || goto failed
-{{else if eq $img.BootMethod "kernel"}}
+{{if eq $img.BootMethod "kernel"}}
 echo Loading kernel and initrd...
 {{if $img.AutoInstallEnabled}}
 echo Auto-install enabled for this image

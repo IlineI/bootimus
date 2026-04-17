@@ -84,7 +84,6 @@ docker-compose up -d
 
 - **[Deployment Guide](docs/deployment.md)** - Docker, binary, networking, and storage
 - **[Image Management](docs/images.md)** - Upload ISOs, extract kernels, netboot support
-- **[Thin OS Boot Method](docs/thinos.md)** - Universal ISO boot via memdisk
 - **[Admin Console](docs/admin.md)** - Web UI and REST API reference
 - **[DHCP Configuration](docs/dhcp.md)** - Configure your DHCP server
 - **[Client Management](docs/clients.md)** - MAC-based access control, auto-discovery, next boot
@@ -190,7 +189,22 @@ Groups are auto-created on startup and when scanning for ISOs. They can also be 
 
 ## DHCP Configuration
 
-Configure your DHCP server to point clients to Bootimus. Example for ISC DHCP:
+Bootimus has two options for the DHCP side of PXE.
+
+### Option 1: Built-in proxyDHCP (recommended)
+
+Bootimus ships with a built-in proxyDHCP responder. Enable it and your existing DHCP server (router, Pi-hole, Windows DHCP, anything) needs **zero PXE configuration** — it keeps handing out IPs as normal, and Bootimus answers only the PXE-specific bits on the same broadcast domain.
+
+```bash
+bootimus serve --proxy-dhcp
+# or: BOOTIMUS_PROXY_DHCP_ENABLED=true
+```
+
+Binds UDP/67; needs `CAP_NET_BIND_SERVICE` or root. Off by default so existing installs aren't surprised.
+
+### Option 2: Configure your DHCP server manually
+
+If you'd rather keep PXE config on your existing DHCP server, point it at Bootimus. Example for ISC DHCP:
 
 ```conf
 subnet 192.168.1.0 netmask 255.255.255.0 {

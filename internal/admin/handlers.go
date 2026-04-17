@@ -42,9 +42,10 @@ type Handler struct {
 	toolsManager       *tools.Manager
 	wolBroadcastAddr   string
 	profileManager     *profiles.Manager
+	proxyDHCPEnabled   bool
 }
 
-func NewHandler(store storage.Storage, dataDir string, isoDir string, bootDir string, version string, blSelector BootloaderSelector, tm *tools.Manager, wolBroadcastAddr string, pm *profiles.Manager) *Handler {
+func NewHandler(store storage.Storage, dataDir string, isoDir string, bootDir string, version string, blSelector BootloaderSelector, tm *tools.Manager, wolBroadcastAddr string, pm *profiles.Manager, proxyDHCPEnabled bool) *Handler {
 	return &Handler{
 		storage:            store,
 		dataDir:            dataDir,
@@ -55,6 +56,7 @@ func NewHandler(store storage.Storage, dataDir string, isoDir string, bootDir st
 		toolsManager:       tm,
 		profileManager:     pm,
 		wolBroadcastAddr:   wolBroadcastAddr,
+		proxyDHCPEnabled:   proxyDHCPEnabled,
 	}
 }
 
@@ -1962,6 +1964,12 @@ func (h *Handler) GetServerInfo(w http.ResponseWriter, r *http.Request) {
 					return os.Getenv("BOOTIMUS_LDAP_HOST")
 				}
 				return "Disabled"
+			}(),
+			"proxy_dhcp": func() string {
+				if h.proxyDHCPEnabled {
+					return "Enabled (standalone — no external DHCP PXE config needed)"
+				}
+				return "Disabled (external DHCP must set next-server/bootfile)"
 			}(),
 		},
 		"environment": map[string]string{

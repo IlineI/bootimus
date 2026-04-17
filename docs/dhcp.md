@@ -4,6 +4,7 @@ Complete guide for configuring various DHCP servers to work with Bootimus for PX
 
 ##  Table of Contents
 
+- [Built-in proxyDHCP (standalone mode)](#built-in-proxydhcp-standalone-mode)
 - [Overview](#overview)
 - [ISC DHCP Server](#isc-dhcp-server)
 - [Dnsmasq](#dnsmasq)
@@ -14,6 +15,94 @@ Complete guide for configuring various DHCP servers to work with Bootimus for PX
 - [Windows Server DHCP](#windows-server-dhcp)
 - [Troubleshooting](#troubleshooting)
 - [PiHole](#pi-hole-dnsmasq)
+
+## Built-in proxyDHCP (standalone mode)
+
+Bootimus includes a built-in proxyDHCP responder (RFC 4578). When enabled, Bootimus answers the PXE-specific DHCP options itself — **your existing DHCP server needs no PXE configuration at all**. It keeps assigning IPs as usual; Bootimus only responds to PXE clients with `next-server`, bootfile, and the PXE vendor class, and never offers an IP address of its own.
+
+This is the simplest way to run Bootimus in any environment where you don't own the main DHCP server, or where you don't want to touch it.
+
+### How it works
+
+1. Client broadcasts `DHCPDISCOVER`.
+2. The LAN's existing DHCP server replies with an IP lease (no PXE info needed).
+3. Bootimus replies on the same broadcast with PXE boot info only — no IP.
+4. The client's PXE ROM merges both replies: IP from the main DHCP, bootfile from Bootimus.
+
+Because Bootimus never offers an IP, there is no conflict with the existing DHCP server and no lease pool to coordinate.
+
+### Enable
+
+```bash
+# CLI flag
+bootimus serve --proxy-dhcp
+
+# Environment variable
+BOOTIMUS_PROXY_DHCP_ENABLED=true
+
+# YAML config
+proxy_dhcp:
+  enabled: true
+  bootfile_bios: undionly.kpxe           # legacy BIOS PXE
+  bootfile_uefi: bootimus.efi            # UEFI x64
+  bootfile_arm64: bootimus-arm64.efi     # UEFI ARM64
+```
+
+Off by default so existing installs that already run dnsmasq/ISC-DHCP/etc. aren't surprised.
+
+### Requirements and caveats
+
+- **Binds UDP/67.** Requires `CAP_NET_BIND_SERVICE` or root. In Docker, the default image already runs as root so no extra capability needed; add `--cap-add NET_BIND_SERVICE` only for rootless setups.
+- **Same broadcast domain.** proxyDHCP relies on seeing client DHCP broadcasts. It works on a flat LAN or a single VLAN. If your network uses a DHCP relay (`ip helper-address`) to forward DHCP across VLANs, the relay forwards to your main DHCP but not to Bootimus — add Bootimus as an additional relay target, or keep targets on the same VLAN as Bootimus.
+- **Docker networking.** Use `macvlan`, `ipvlan`, or `network_mode: host` so the container is a first-class participant on the broadcast domain. A default bridge network will not work — broadcasts get trapped inside `docker0`.
+- **Two proxyDHCP servers on the same LAN is legal, but debugging is a nightmare.** If you enable Bootimus's built-in proxyDHCP, disable any existing dnsmasq proxyDHCP advertising PXE on the same network.
+
+### docker-compose example
+
+```yaml
+services:
+  bootimus:
+    image: garybowers/bootimus:latest
+    environment:
+      BOOTIMUS_PROXY_DHCP_ENABLED: "true"
+      BOOTIMUS_SERVER_ADDR: 10.76.42.41    # the container's macvlan IP
+    ports:
+      - "67:67/udp"                         # proxyDHCP
+      - "69:69/udp"                         # TFTP
+      - "8080:8080/tcp"
+      - "8081:8081/tcp"
+    networks:
+      lan:
+        ipv4_address: 10.76.42.41
+networks:
+  lan:
+    driver: macvlan
+    driver_opts:
+      parent: eth0
+    ipam:
+      config:
+        - subnet: 10.76.42.0/24
+```
+
+### Verifying
+
+Container logs should show:
+
+```
+proxyDHCP: listening on UDP/67, advertising next-server=10.76.42.41 (BIOS=undionly.kpxe, UEFI=bootimus.efi, ARM64=bootimus-arm64.efi)
+```
+
+And per-client lines when a PXE boot happens:
+
+```
+proxyDHCP: DISCOVER -> 6c:24:08:0c:bb:6b arch=7 bootfile=bootimus.efi
+proxyDHCP: REQUEST  -> 6c:24:08:0c:bb:6b arch=7 bootfile=bootimus.efi
+TFTP: Client requesting file: bootimus.efi
+```
+
+The admin UI's **Server Information** panel also shows current proxyDHCP state.
+
+---
 
 ## Overview
 

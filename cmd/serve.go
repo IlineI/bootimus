@@ -194,6 +194,11 @@ func runServe(cmd *cobra.Command, args []string) {
 		NBDPort:          viper.GetInt("nbd_port"),
 		WOLBroadcastAddr: viper.GetString("wol_broadcast_addr"),
 		ProfileManager:   profileMgr,
+
+		ProxyDHCPEnabled:      viper.GetBool("proxy_dhcp.enabled"),
+		ProxyDHCPBootfileBIOS: viper.GetString("proxy_dhcp.bootfile_bios"),
+		ProxyDHCPBootfileUEFI: viper.GetString("proxy_dhcp.bootfile_uefi"),
+		ProxyDHCPBootfileARM:  viper.GetString("proxy_dhcp.bootfile_arm64"),
 	}
 
 	srv := server.New(cfg)

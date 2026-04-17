@@ -1,4 +1,4 @@
-.PHONY: help build run clean docker-build docker-up docker-down docker-push release binaries secureboot sync-profiles
+.PHONY: help build run clean docker-build docker-up docker-down docker-push release binaries bootloaders sync-profiles
 
 VERSION    ?= $(shell cat VERSION)
 DOCKER_USER ?= garybowers
@@ -21,6 +21,9 @@ help:
 	@echo "  make docker-up        - Start services via docker compose"
 	@echo "  make docker-down      - Stop services"
 	@echo ""
+	@echo "Bootloaders:"
+	@echo "  make bootloaders      - Build iPXE and download Secure Boot binaries"
+	@echo ""
 	@echo "Publish:"
 	@echo "  make binaries         - Build multi-arch binaries via docker buildx"
 	@echo "  make release          - Build binaries and show upload instructions"
@@ -28,9 +31,9 @@ help:
 	@echo ""
 	@echo "Override version:  VERSION=1.0.0 make build"
 
-secureboot:
-	@echo "Downloading Secure Boot bootloaders..."
-	./scripts/download-secureboot.sh
+bootloaders:
+	@echo "Building iPXE bootloaders and downloading Secure Boot binaries..."
+	./scripts/build-bootloaders.sh
 
 ## Local (binary) -------------------------------------------------------------
 
