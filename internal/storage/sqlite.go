@@ -5,6 +5,7 @@ import (
 	"log"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"bootimus/internal/models"
 
@@ -31,7 +32,7 @@ func NewSQLiteStore(dataDir string) (*SQLiteStore, error) {
 }
 
 func (s *SQLiteStore) AutoMigrate() error {
-	if err := s.db.AutoMigrate(&models.User{}, &models.Client{}, &models.ImageGroup{}, &models.Image{}, &models.BootLog{}, &models.CustomFile{}, &models.DriverPack{}, &models.MenuTheme{}, &models.BootTool{}, &models.HardwareInventory{}, &models.DistroProfile{}); err != nil {
+	if err := s.db.AutoMigrate(&models.User{}, &models.ClientGroup{}, &models.Client{}, &models.ImageGroup{}, &models.Image{}, &models.BootLog{}, &models.CustomFile{}, &models.DriverPack{}, &models.MenuTheme{}, &models.BootTool{}, &models.HardwareInventory{}, &models.DistroProfile{}, &models.WebhookConfig{}, &models.ScheduledTask{}); err != nil {
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 
@@ -76,7 +77,8 @@ func (s *SQLiteStore) CreateClient(client *models.Client) error {
 
 func (s *SQLiteStore) UpdateClient(mac string, client *models.Client) error {
 	return s.db.Model(&models.Client{}).Where("mac_address = ?", mac).
-		Select("Name", "Description", "Enabled", "ShowPublicImages", "BootloaderSet", "Static", "UpdatedAt").
+		Select("Name", "Description", "Enabled", "ShowPublicImages", "BootloaderSet", "Static", "ClientGroupID",
+			"IPMIHost", "IPMIPort", "IPMIUsername", "IPMIPassword", "IPMIInsecure", "UpdatedAt").
 		Updates(client).Error
 }
 
@@ -222,6 +224,18 @@ func (s *SQLiteStore) GetStats() (map[string]int64, error) {
 func (s *SQLiteStore) GetBootLogs(limit int) ([]models.BootLog, error) {
 	var logs []models.BootLog
 	if err := s.db.Preload("Client").Preload("Image").
+		Order("created_at DESC").
+		Limit(limit).
+		Find(&logs).Error; err != nil {
+		return nil, err
+	}
+	return logs, nil
+}
+
+func (s *SQLiteStore) GetBootLogsByMAC(macAddress string, limit int) ([]models.BootLog, error) {
+	var logs []models.BootLog
+	if err := s.db.Preload("Client").Preload("Image").
+		Where("mac_address = ?", macAddress).
 		Order("created_at DESC").
 		Limit(limit).
 		Find(&logs).Error; err != nil {
@@ -477,10 +491,28 @@ func (s *SQLiteStore) ListImagesByGroup(groupID uint) ([]*models.Image, error) {
 func (s *SQLiteStore) GetImagesForClient(macAddress string) ([]models.Image, error) {
 	var client models.Client
 	if err := s.db.Where("mac_address = ? AND enabled = ?", macAddress, true).First(&client).Error; err == nil {
-		log.Printf("GetImagesForClient: client=%s, AllowedImages=%v, ShowPublicImages=%v", macAddress, client.AllowedImages, client.ShowPublicImages)
+		// Overlay: union client.AllowedImages with group.AllowedImages when the
+		// client belongs to an enabled group.
+		allowed := append([]string{}, client.AllowedImages...)
+		if client.ClientGroupID != nil {
+			var group models.ClientGroup
+			if err := s.db.Where("id = ? AND enabled = ?", *client.ClientGroupID, true).First(&group).Error; err == nil {
+				seen := make(map[string]bool, len(allowed))
+				for _, f := range allowed {
+					seen[f] = true
+				}
+				for _, f := range group.AllowedImages {
+					if !seen[f] {
+						allowed = append(allowed, f)
+						seen[f] = true
+					}
+				}
+			}
+		}
+		log.Printf("GetImagesForClient: client=%s, AllowedImages=%v, ShowPublicImages=%v", macAddress, allowed, client.ShowPublicImages)
 		var assigned []models.Image
-		if len(client.AllowedImages) > 0 {
-			s.db.Where("filename IN (?) AND enabled = ?", []string(client.AllowedImages), true).Find(&assigned)
+		if len(allowed) > 0 {
+			s.db.Where("filename IN (?) AND enabled = ?", allowed, true).Find(&assigned)
 			if len(assigned) == 0 {
 				// Debug: list all image filenames to find the mismatch
 				var allImages []models.Image
@@ -745,4 +777,137 @@ func (s *SQLiteStore) Close() error {
 		return err
 	}
 	return db.Close()
+}
+
+func (s *SQLiteStore) ListScheduledTasks() ([]*models.ScheduledTask, error) {
+	var tasks []*models.ScheduledTask
+	if err := s.db.Preload("ClientGroup").Order("name ASC").Find(&tasks).Error; err != nil {
+		return nil, err
+	}
+	return tasks, nil
+}
+
+func (s *SQLiteStore) ListScheduledTasksByGroup(groupID uint) ([]*models.ScheduledTask, error) {
+	var tasks []*models.ScheduledTask
+	if err := s.db.Where("client_group_id = ?", groupID).Order("name ASC").Find(&tasks).Error; err != nil {
+		return nil, err
+	}
+	return tasks, nil
+}
+
+func (s *SQLiteStore) GetScheduledTask(id uint) (*models.ScheduledTask, error) {
+	var t models.ScheduledTask
+	if err := s.db.Preload("ClientGroup").First(&t, id).Error; err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
+
+func (s *SQLiteStore) CreateScheduledTask(task *models.ScheduledTask) error {
+	return s.db.Create(task).Error
+}
+
+func (s *SQLiteStore) UpdateScheduledTask(id uint, task *models.ScheduledTask) error {
+	return s.db.Model(&models.ScheduledTask{}).Where("id = ?", id).
+		Select("Name", "Enabled", "CronExpr", "ClientGroupID", "ActionType", "ActionParam", "UpdatedAt").
+		Updates(task).Error
+}
+
+func (s *SQLiteStore) DeleteScheduledTask(id uint) error {
+	return s.db.Delete(&models.ScheduledTask{}, id).Error
+}
+
+func (s *SQLiteStore) RecordScheduledTaskRun(id uint, status, errorMsg string) error {
+	now := time.Now()
+	return s.db.Model(&models.ScheduledTask{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"last_run":    now,
+		"last_status": status,
+		"last_error":  errorMsg,
+		"run_count":   gorm.Expr("run_count + 1"),
+	}).Error
+}
+
+func (s *SQLiteStore) GetWebhookConfig() (*models.WebhookConfig, error) {
+	var cfg models.WebhookConfig
+	if err := s.db.First(&cfg, 1).Error; err != nil {
+		return &models.WebhookConfig{ID: 1, OnBootStarted: true, OnClientDiscovered: true}, nil
+	}
+	return &cfg, nil
+}
+
+func (s *SQLiteStore) UpdateWebhookConfig(cfg *models.WebhookConfig) error {
+	cfg.ID = 1
+	return s.db.Save(cfg).Error
+}
+
+func (s *SQLiteStore) ListClientGroups() ([]*models.ClientGroup, error) {
+	var groups []*models.ClientGroup
+	if err := s.db.Order("name ASC").Find(&groups).Error; err != nil {
+		return nil, err
+	}
+	return groups, nil
+}
+
+func (s *SQLiteStore) GetClientGroup(id uint) (*models.ClientGroup, error) {
+	var group models.ClientGroup
+	if err := s.db.First(&group, id).Error; err != nil {
+		return nil, err
+	}
+	return &group, nil
+}
+
+func (s *SQLiteStore) GetClientGroupByName(name string) (*models.ClientGroup, error) {
+	var group models.ClientGroup
+	if err := s.db.Where("name = ?", name).First(&group).Error; err != nil {
+		return nil, err
+	}
+	return &group, nil
+}
+
+func (s *SQLiteStore) CreateClientGroup(group *models.ClientGroup) error {
+	var existing models.ClientGroup
+	if err := s.db.Unscoped().Where("name = ? AND deleted_at IS NOT NULL", group.Name).First(&existing).Error; err == nil {
+		existing.DeletedAt = gorm.DeletedAt{}
+		existing.Description = group.Description
+		existing.Enabled = group.Enabled
+		existing.AllowedImages = group.AllowedImages
+		existing.BootloaderSet = group.BootloaderSet
+		existing.WOLBroadcastAddr = group.WOLBroadcastAddr
+		existing.StaggerDelayMillis = group.StaggerDelayMillis
+		if err := s.db.Unscoped().Save(&existing).Error; err != nil {
+			return err
+		}
+		group.ID = existing.ID
+		return nil
+	}
+	return s.db.Create(group).Error
+}
+
+func (s *SQLiteStore) UpdateClientGroup(id uint, group *models.ClientGroup) error {
+	return s.db.Model(&models.ClientGroup{}).Where("id = ?", id).
+		Select("Name", "Description", "Enabled", "AllowedImages", "BootloaderSet", "WOLBroadcastAddr", "StaggerDelayMillis",
+			"IPMIPort", "IPMIUsername", "IPMIPassword", "IPMIInsecure", "UpdatedAt").
+		Updates(group).Error
+}
+
+func (s *SQLiteStore) DeleteClientGroup(id uint) error {
+	// Detach any clients that point at this group so they don't end up with a
+	// dangling FK.
+	if err := s.db.Model(&models.Client{}).Where("client_group_id = ?", id).Update("client_group_id", nil).Error; err != nil {
+		return err
+	}
+	return s.db.Delete(&models.ClientGroup{}, id).Error
+}
+
+func (s *SQLiteStore) ListClientsInGroup(groupID uint) ([]*models.Client, error) {
+	var clients []*models.Client
+	if err := s.db.Where("client_group_id = ?", groupID).Order("name ASC").Find(&clients).Error; err != nil {
+		return nil, err
+	}
+	return clients, nil
+}
+
+func (s *SQLiteStore) SetClientGroup(mac string, groupID *uint) error {
+	return s.db.Model(&models.Client{}).Where("mac_address = ?", mac).
+		Update("client_group_id", groupID).Error
 }

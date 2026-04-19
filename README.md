@@ -13,6 +13,7 @@ I've used Claude CLI to help with some parts of this project - mostly making the
 ## Features
 
 - **Single binary, zero config**: Everything bundled - bootloaders, web UI, database. Just run it
+- **Standalone PXE**: Built-in proxyDHCP responder lets Bootimus drive PXE on any LAN without touching the existing DHCP server
 - **50+ distro support**: Automatic kernel/initrd extraction with a generic fallback scanner for unknown ISOs
 - **Built-in diagnostic tools**: GParted, Clonezilla, Memtest86+, SystemRescue, ShredOS, Netboot.xyz - one-click download and enable from the admin UI
 - **Custom tools**: Add your own PXE-bootable tools with configurable boot methods (kernel, chain, memdisk)
@@ -20,10 +21,9 @@ I've used Claude CLI to help with some parts of this project - mostly making the
 - **Client auto-discovery**: Clients are automatically detected when they PXE boot, like DHCP leases - promote to static when ready
 - **Next boot action**: Set a one-time boot image for a client with optional Wake-on-LAN - auto-clears after use
 - **Hardware inventory**: Automatic collection of CPU, memory, manufacturer, serial number, and NIC info from PXE clients
-- **JWT authentication**: Secure token-based auth with a dedicated login page, replacing browser basic auth dialogs
+- **JWT authentication**: Secure token-based auth with a dedicated login page
 - **LDAP/Active Directory**: Optional LDAP backend with group-based admin access - local accounts always work as fallback
 - **Swappable bootloaders**: Ship with embedded iPXE, or bring your own custom bootloader sets
-- **Secure Boot**: Microsoft-signed shim bootloader for UEFI Secure Boot environments
 - **Modern admin UI**: Sidebar navigation, consistent toolbars, real-time colour-coded logs, REST API
 - **Multi-database**: SQLite out of the box, PostgreSQL for production
 - **Docker and bare metal**: Multi-arch images (amd64/arm64) or a single static binary
@@ -84,6 +84,7 @@ docker-compose up -d
 
 - **[Deployment Guide](docs/deployment.md)** - Docker, binary, networking, and storage
 - **[Image Management](docs/images.md)** - Upload ISOs, extract kernels, netboot support
+- **[USB Appliance](docs/appliance.md)** - Flashable Alpine+bootimus image for portable PXE servers
 - **[Admin Console](docs/admin.md)** - Web UI and REST API reference
 - **[DHCP Configuration](docs/dhcp.md)** - Configure your DHCP server
 - **[Client Management](docs/clients.md)** - MAC-based access control, auto-discovery, next boot
@@ -102,7 +103,6 @@ Bootimus includes a built-in tools system for diagnostic and utility software. T
 | **SystemRescue** | Full rescue toolkit (file recovery, disk repair, network tools) |
 | **ShredOS** | Secure disk wiping based on nwipe |
 | **Netboot.xyz** | Chainloads into hundreds of OS installers and tools |
-| **HDT** | Hardware inventory and diagnostics |
 
 Download URLs are shown in the UI and can be overridden to point at local mirrors or newer versions.
 
@@ -117,7 +117,7 @@ You can add your own PXE-bootable tools via the **"+ Add Custom Tool"** button i
 
 ## Bootloader Management
 
-Bootimus ships with embedded iPXE bootloaders for UEFI (x86_64, ARM64), Legacy BIOS, and Secure Boot. You can also use custom bootloader sets:
+Bootimus ships with embedded iPXE bootloaders for UEFI (x86_64, ARM64) and Legacy BIOS. You can also use custom bootloader sets:
 
 1. Create a subfolder in `{data-dir}/bootloaders/` (e.g. `ipxe-custom/`)
 2. Place your custom bootloader files in it
@@ -175,6 +175,7 @@ Groups are auto-created on startup and when scanning for ISOs. They can also be 
 | **Language** | Go | C |
 | **Single Binary** | Yes | No |
 | **Embedded Bootloaders** | Yes | No |
+| **Standalone PXE** | Built-in proxyDHCP — no DHCP reconfig needed | Requires external DHCP changes |
 | **Database** | SQLite / PostgreSQL | File-based |
 | **Web UI** | Modern sidebar UI with REST API | Basic HTML |
 | **Authentication** | JWT + LDAP/AD | None |
@@ -268,17 +269,46 @@ Run `make help` for all available targets.
 
 ## Troubleshooting
 
-### Permission Denied on Port 69
+### Permission Denied on Port 67 or 69
+
+Bootimus binds privileged UDP ports: 69 for TFTP, and 67 if `--proxy-dhcp` is enabled.
 
 ```bash
 # Run as root
 sudo ./bootimus serve
 
-# Or use Docker with NET_BIND_SERVICE
+# Or grant capabilities once to the binary
+sudo setcap 'cap_net_bind_service=+ep' ./bootimus
+
+# Or use Docker with NET_BIND_SERVICE (default image already runs as root)
 docker run --cap-add NET_BIND_SERVICE ...
 
-# Or use non-privileged port
+# Or use a non-privileged TFTP port
 ./bootimus serve --tftp-port 6969
+```
+
+### Client Not Booting / No PXE Offer
+
+Most common first-time PXE failures:
+
+```bash
+# 1. Check Bootimus is seeing the client's DHCP request
+docker logs bootimus | grep -E 'proxyDHCP|TFTP'
+
+# 2. Same broadcast domain — PXE DHCP is L2 broadcast.
+#    In Docker, the container must use macvlan/ipvlan or network_mode: host.
+#    The default bridge network will NOT work; docker0 traps broadcasts.
+
+# 3. Two DHCP servers advertising PXE? Pick one.
+#    If proxyDHCP is enabled, strip PXE options from your router's DHCP.
+
+# 4. Firewall
+sudo ufw allow 67/udp    # proxyDHCP (if enabled)
+sudo ufw allow 69/udp    # TFTP
+sudo ufw allow 8080/tcp  # HTTP boot
+
+# 5. Check the client can reach HTTP
+curl -v http://<bootimus-ip>:8080/menu.ipxe
 ```
 
 ### No ISOs in Menu
@@ -296,6 +326,23 @@ curl -H "Authorization: Bearer $TOKEN" -X PUT http://localhost:8081/api/images?f
   -d '{"public": true, "enabled": true}'
 ```
 
+### UEFI Secure Boot Enabled on Target
+
+Bootimus does not currently ship Microsoft-signed bootloaders. On machines with Secure Boot enabled, PXE boot fails with a signature-verification error.
+
+**Fix**: disable Secure Boot in the target's firmware, or enrol Bootimus's iPXE EFI binary into the firmware's MOK keystore.
+
+### Forgotten Admin Password
+
+```bash
+# Prints a fresh random password to the logs, then continues starting
+./bootimus serve --reset-admin-password
+
+# Via Docker
+docker exec bootimus bootimus serve --reset-admin-password
+docker logs bootimus | grep "New Password"
+```
+
 ### Database Connection Failed
 
 ```bash
@@ -310,7 +357,7 @@ psql -h localhost -U bootimus -d bootimus
 
 Licensed under the Apache Licence, Version 2.0. See [LICENSE](LICENSE) for details.
 
-Copyright 2025 Bootimus Contributors
+Copyright 2025-2026 Bootimus Contributors
 
 ## Contributing
 

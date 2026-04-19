@@ -54,7 +54,14 @@ async function showLoginScreen() {
         document.getElementById('login-auth-selector').style.display = 'none';
     }
 
-    document.getElementById('login-username').focus();
+    // Only auto-focus the username field if the user isn't already
+    // interacting with the login form. Background polling can hit 401s and
+    // re-run showLoginScreen mid-typing; without this guard, focus would
+    // get stolen away from the password field on every poll.
+    const active = document.activeElement;
+    if (!active || !active.closest || !active.closest('#login-form')) {
+        document.getElementById('login-username').focus();
+    }
 }
 
 function showApp() {
@@ -317,11 +324,12 @@ function setupTabs() {
             const matchingTab = document.querySelector(`.tabs .tab[data-tab="${item.dataset.tab}"]`);
             if (matchingTab) matchingTab.classList.add('active');
 
-            if (item.dataset.tab === 'groups') loadGroups();
+            if (item.dataset.tab === 'images') loadGroups();
+            if (item.dataset.tab === 'clients') loadClientGroups();
             if (item.dataset.tab === 'tools') loadTools();
             if (item.dataset.tab === 'bootloaders') loadBootloaders();
             if (item.dataset.tab === 'profiles') loadProfiles();
-            if (item.dataset.tab === 'settings') { loadTheme(); loadUSBImages(); }
+            if (item.dataset.tab === 'settings') { loadTheme(); loadUSBImages(); loadWebhookConfig(); }
         });
     });
 
@@ -418,11 +426,295 @@ async function loadServerInfo() {
         const data = await res.json();
 
         if (data.success) {
+            if (data.data && data.data.configuration && data.data.configuration.http_port) {
+                cachedHTTPPort = parseInt(data.data.configuration.http_port, 10) || cachedHTTPPort;
+            }
             renderServerInfo(data.data);
         }
     } catch (err) {
         document.getElementById('server-info').innerHTML = '<p class="alert alert-error">Failed to load server info</p>';
     }
+}
+
+// Cached from /api/server-info so the admin UI can build links to the
+// public HTTP port (where ISOs are served) regardless of what port the
+// admin panel itself is on.
+let cachedHTTPPort = 8080;
+
+async function powerClient(action) {
+    const form = document.getElementById('edit-client-form');
+    const mac = form.querySelector('[name="mac_address"]').value;
+    const result = document.getElementById('power-client-result');
+    if (!mac) return;
+    result.textContent = `Sending ${action}…`;
+    result.style.color = 'var(--text-secondary)';
+    try {
+        const res = await authFetch(`${API_BASE}/clients/power?mac=${encodeURIComponent(mac)}&action=${encodeURIComponent(action)}`, { method: 'POST' });
+        const data = await res.json();
+        result.textContent = (data.success ? '✓ ' : '✗ ') + (data.message || data.error || '');
+        result.style.color = data.success ? 'var(--teal, green)' : 'var(--danger)';
+    } catch (err) {
+        result.textContent = '✗ ' + err.message;
+        result.style.color = 'var(--danger)';
+    }
+}
+
+async function powerStatusClient() {
+    const form = document.getElementById('edit-client-form');
+    const mac = form.querySelector('[name="mac_address"]').value;
+    const result = document.getElementById('power-client-result');
+    if (!mac) return;
+    result.textContent = 'Querying…';
+    result.style.color = 'var(--text-secondary)';
+    try {
+        const res = await authFetch(`${API_BASE}/clients/power/status?mac=${encodeURIComponent(mac)}`);
+        const data = await res.json();
+        if (data.success && data.data) {
+            result.textContent = 'Power: ' + (data.data.state || 'unknown');
+            result.style.color = 'var(--text-primary)';
+        } else {
+            result.textContent = '✗ ' + (data.error || 'unknown');
+            result.style.color = 'var(--danger)';
+        }
+    } catch (err) {
+        result.textContent = '✗ ' + err.message;
+        result.style.color = 'var(--danger)';
+    }
+}
+
+function applySchedulePreset() {
+    const preset = document.getElementById('cg-sched-preset').value;
+    if (preset) document.getElementById('cg-sched-cron').value = preset;
+}
+
+function updateScheduleActionHint() {
+    const action = document.getElementById('cg-sched-action').value;
+    const wrap = document.getElementById('cg-sched-param-wrap');
+    const label = document.getElementById('cg-sched-param-label');
+    const hint = document.getElementById('cg-sched-param-hint');
+    const input = document.getElementById('cg-sched-param');
+    switch (action) {
+        case 'power':
+            wrap.style.display = '';
+            label.textContent = 'Redfish Action';
+            input.placeholder = 'On';
+            hint.textContent = 'On / ForceOff / ForceRestart / GracefulShutdown / GracefulRestart';
+            break;
+        case 'next-boot':
+            wrap.style.display = '';
+            label.textContent = 'Image Filename';
+            input.placeholder = 'ubuntu-24.04.iso';
+            hint.textContent = 'Filename of the image to set as the next boot';
+            break;
+        default:
+            wrap.style.display = 'none';
+            input.value = '';
+    }
+}
+
+async function loadGroupSchedules(groupId) {
+    const container = document.getElementById('cg-schedules-list');
+    if (!container) return;
+    container.innerHTML = '<span style="color: var(--text-secondary); font-size: 12px;">Loading…</span>';
+    try {
+        const res = await authFetch(`${API_BASE}/scheduled-tasks?group_id=${groupId}`);
+        const data = await res.json();
+        if (!data.success) { container.innerHTML = ''; return; }
+        const tasks = data.data || [];
+        if (tasks.length === 0) {
+            container.innerHTML = '<div style="color: var(--text-secondary); font-size: 12px;">No schedules yet.</div>';
+            return;
+        }
+        container.innerHTML = tasks.map(t => {
+            const last = t.last_run ? new Date(t.last_run).toLocaleString() : 'never';
+            const status = t.last_status || '—';
+            const param = t.action_param ? ` <code>${escapeHtml(t.action_param)}</code>` : '';
+            return `
+                <div style="padding: 8px; margin-bottom: 6px; background: var(--bg-secondary); border-radius: var(--radius-sm); display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <span class="status-dot ${t.enabled ? 'on' : 'off'}" title="${t.enabled ? 'Enabled' : 'Disabled'}"></span>
+                    <div style="flex: 1; min-width: 200px;">
+                        <div><strong>${escapeHtml(t.name)}</strong> — ${escapeHtml(t.action_type)}${param}</div>
+                        <div style="color: var(--text-muted); font-size: 11px;"><code>${escapeHtml(t.cron_expr)}</code> · last: ${last} (${escapeHtml(status)})</div>
+                    </div>
+                    <button type="button" class="btn btn-sm" onclick="runScheduleNow(${t.id})">Run Now</button>
+                    <button type="button" class="btn btn-sm" onclick="toggleSchedule(${t.id}, ${!t.enabled})">${t.enabled ? 'Disable' : 'Enable'}</button>
+                    <button type="button" class="btn btn-sm btn-danger" onclick="deleteSchedule(${t.id})">Delete</button>
+                </div>
+            `;
+        }).join('');
+    } catch (err) {
+        container.innerHTML = '<span style="color: var(--danger);">Load failed</span>';
+    }
+}
+
+async function saveNewSchedule() {
+    const form = document.getElementById('edit-client-group-form');
+    const groupId = parseInt(form.elements.id.value, 10);
+    if (!groupId) return;
+    const body = {
+        name: document.getElementById('cg-sched-name').value.trim(),
+        cron_expr: document.getElementById('cg-sched-cron').value.trim(),
+        action_type: document.getElementById('cg-sched-action').value,
+        action_param: document.getElementById('cg-sched-param').value.trim(),
+        client_group_id: groupId,
+        enabled: true,
+    };
+    if (!body.name || !body.cron_expr) {
+        showAlert('Name and cron expression are required', 'error');
+        return;
+    }
+    try {
+        const res = await authFetch(`${API_BASE}/scheduled-tasks`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (!data.success) { showAlert(data.error || 'Failed', 'error'); return; }
+        showAlert('Schedule created', 'success');
+        document.getElementById('cg-sched-name').value = '';
+        document.getElementById('cg-sched-cron').value = '';
+        document.getElementById('cg-sched-param').value = '';
+        await loadGroupSchedules(groupId);
+    } catch (err) {
+        showAlert('Create failed: ' + err.message, 'error');
+    }
+}
+
+async function runScheduleNow(id) {
+    try {
+        const res = await authFetch(`${API_BASE}/scheduled-tasks/run?id=${id}`, { method: 'POST' });
+        const data = await res.json();
+        showAlert(data.message || (data.success ? 'Dispatched' : 'Failed'), data.success ? 'success' : 'error');
+        const groupId = parseInt(document.getElementById('edit-client-group-form').elements.id.value, 10);
+        setTimeout(() => loadGroupSchedules(groupId), 800);
+    } catch (err) { showAlert('Run failed: ' + err.message, 'error'); }
+}
+
+async function toggleSchedule(id, enabled) {
+    try {
+        const res = await authFetch(`${API_BASE}/scheduled-tasks/update?id=${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled }),
+        });
+        const data = await res.json();
+        if (!data.success) { showAlert(data.error || 'Update failed', 'error'); return; }
+        const groupId = parseInt(document.getElementById('edit-client-group-form').elements.id.value, 10);
+        await loadGroupSchedules(groupId);
+    } catch (err) { showAlert('Toggle failed: ' + err.message, 'error'); }
+}
+
+async function deleteSchedule(id) {
+    if (!confirm('Delete this schedule?')) return;
+    try {
+        const res = await authFetch(`${API_BASE}/scheduled-tasks/delete?id=${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (!data.success) { showAlert(data.error || 'Delete failed', 'error'); return; }
+        const groupId = parseInt(document.getElementById('edit-client-group-form').elements.id.value, 10);
+        await loadGroupSchedules(groupId);
+    } catch (err) { showAlert('Delete failed: ' + err.message, 'error'); }
+}
+
+async function bulkPowerClientGroup(action) {
+    const id = parseInt(document.getElementById('edit-client-group-form').elements.id.value, 10);
+    if (!id) return;
+    try {
+        const res = await authFetch(`${API_BASE}/client-groups/power?id=${id}&action=${encodeURIComponent(action)}`, { method: 'POST' });
+        const data = await res.json();
+        showAlert(data.message || (data.success ? 'OK' : 'Failed'), data.success ? 'success' : 'error');
+    } catch (err) { showAlert('Bulk power failed: ' + err.message, 'error'); }
+}
+
+async function loadWebhookConfig() {
+    try {
+        const res = await authFetch(`${API_BASE}/webhook`);
+        const data = await res.json();
+        if (!data.success || !data.data) return;
+        const c = data.data;
+        document.getElementById('webhook-enabled').checked = !!c.enabled;
+        document.getElementById('webhook-url').value = c.url || '';
+        document.getElementById('webhook-on-boot-started').checked = !!c.on_boot_started;
+        document.getElementById('webhook-on-client-discovered').checked = !!c.on_client_discovered;
+        document.getElementById('webhook-on-inventory-updated').checked = !!c.on_inventory_updated;
+    } catch (err) {
+        console.error('Failed to load webhook config:', err);
+    }
+}
+
+async function saveWebhookConfig(e) {
+    if (e) e.preventDefault();
+    const body = {
+        enabled: document.getElementById('webhook-enabled').checked,
+        url: document.getElementById('webhook-url').value.trim(),
+        on_boot_started: document.getElementById('webhook-on-boot-started').checked,
+        on_client_discovered: document.getElementById('webhook-on-client-discovered').checked,
+        on_inventory_updated: document.getElementById('webhook-on-inventory-updated').checked,
+    };
+    try {
+        const res = await authFetch(`${API_BASE}/webhook`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (data.success) showAlert('Webhook saved', 'success');
+        else showAlert(data.error || 'Save failed', 'error');
+    } catch (err) {
+        showAlert('Save failed: ' + err.message, 'error');
+    }
+}
+
+async function testWebhook() {
+    const result = document.getElementById('webhook-test-result');
+    result.textContent = 'Sending…';
+    result.style.color = 'var(--text-secondary)';
+    try {
+        const res = await authFetch(`${API_BASE}/webhook/test`, { method: 'POST' });
+        const data = await res.json();
+        result.textContent = (data.success ? '✓ ' : '✗ ') + (data.message || data.error || '');
+        result.style.color = data.success ? 'var(--teal, green)' : 'var(--danger)';
+    } catch (err) {
+        result.textContent = '✗ ' + err.message;
+        result.style.color = 'var(--danger)';
+    }
+}
+
+async function downloadBackup() {
+    try {
+        const res = await authFetch(`${API_BASE}/backup/export`);
+        if (!res.ok) {
+            showAlert('Backup download failed', 'error');
+            return;
+        }
+        const blob = await res.blob();
+        const cd = res.headers.get('Content-Disposition') || '';
+        let filename = 'bootimus-backup.tar.gz';
+        const m = cd.match(/filename="?([^";]+)"?/);
+        if (m) filename = m[1];
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+    } catch (err) {
+        showAlert('Backup download failed: ' + err.message, 'error');
+    }
+}
+
+function downloadISOFromProperties() {
+    const filename = document.getElementById('image-props-filename').value;
+    if (!filename) return;
+    const url = `${window.location.protocol}//${window.location.hostname}:${cachedHTTPPort}/isos/${encodeURIComponent(filename)}`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.target = '_blank';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
 }
 
 function renderServerInfo(info) {
@@ -433,6 +725,37 @@ function renderServerInfo(info) {
         if (pct > 80) return 'var(--danger)';
         if (pct > 60) return 'var(--warning)';
         return 'var(--teal)';
+    }
+
+    function ringGauge(pct, color) {
+        const size = 128, r = 54, stroke = 10;
+        const C = 2 * Math.PI * r;
+        const offset = C - (Math.max(0, Math.min(100, pct)) / 100) * C;
+        return `
+            <svg viewBox="0 0 ${size} ${size}">
+                <circle class="res-gauge-track" cx="${size/2}" cy="${size/2}" r="${r}"
+                        fill="none" stroke-width="${stroke}"/>
+                <circle class="res-gauge-fill" cx="${size/2}" cy="${size/2}" r="${r}"
+                        fill="none" stroke="${color}" stroke-width="${stroke}"
+                        stroke-dasharray="${C.toFixed(2)}" stroke-dashoffset="${offset.toFixed(2)}"
+                        stroke-linecap="round"
+                        transform="rotate(-90 ${size/2} ${size/2})"
+                        style="color: ${color}"/>
+            </svg>
+        `;
+    }
+
+    function resCard(label, pct, detail) {
+        const color = resColor(pct);
+        return `
+        <div class="res-card">
+            <span class="res-label">${label}</span>
+            <div class="res-gauge">
+                ${ringGauge(pct, color)}
+                <div class="res-gauge-text" style="color: ${color}">${pct.toFixed(1)}%</div>
+            </div>
+            <span class="res-detail">${detail}</span>
+        </div>`;
     }
 
     // Update version in sidebar and about modal
@@ -458,37 +781,28 @@ function renderServerInfo(info) {
         if (sysStats.host.architecture) statusCards += `<div class="rs-metric"><span class="rs-label">Arch</span><span class="rs-value">${sysStats.host.architecture}</span></div>`;
     }
 
-    // Build resource cards: small label, large colored value, thin bar, detail text
+    // Build resource cards: ring gauge per metric
     let resourceCards = '';
     if (sysStats.cpu) {
-        const cpuPct = sysStats.cpu.usage_percent;
-        resourceCards += `
-        <div class="res-card">
-            <span class="res-label">CPU Usage</span>
-            <span class="res-big" style="color: ${resColor(cpuPct)}">${cpuPct.toFixed(1)}%</span>
-            <div class="res-bar"><div class="res-bar-fill" style="width: ${cpuPct}%; background: ${resColor(cpuPct)}"></div></div>
-            <span class="res-detail">${sysStats.cpu.cores} core${sysStats.cpu.cores !== 1 ? 's' : ''} available</span>
-        </div>`;
+        resourceCards += resCard(
+            'CPU Usage',
+            sysStats.cpu.usage_percent,
+            `${sysStats.cpu.cores} core${sysStats.cpu.cores !== 1 ? 's' : ''} available`
+        );
     }
     if (sysStats.memory) {
-        const memPct = sysStats.memory.used_percent;
-        resourceCards += `
-        <div class="res-card">
-            <span class="res-label">Memory</span>
-            <span class="res-big" style="color: ${resColor(memPct)}">${memPct.toFixed(1)}%</span>
-            <div class="res-bar"><div class="res-bar-fill" style="width: ${memPct}%; background: ${resColor(memPct)}"></div></div>
-            <span class="res-detail">${formatBytes(sysStats.memory.used)} used of ${formatBytes(sysStats.memory.total)}</span>
-        </div>`;
+        resourceCards += resCard(
+            'Memory',
+            sysStats.memory.used_percent,
+            `${formatBytes(sysStats.memory.used)} used of ${formatBytes(sysStats.memory.total)}`
+        );
     }
     (sysStats.disk || []).forEach(disk => {
-        const diskPct = disk.used_percent;
-        resourceCards += `
-        <div class="res-card">
-            <span class="res-label">Disk ${disk.path}</span>
-            <span class="res-big" style="color: ${resColor(diskPct)}">${diskPct.toFixed(1)}%</span>
-            <div class="res-bar"><div class="res-bar-fill" style="width: ${diskPct}%; background: ${resColor(diskPct)}"></div></div>
-            <span class="res-detail">${formatBytes(disk.free)} free of ${formatBytes(disk.total)}</span>
-        </div>`;
+        resourceCards += resCard(
+            `Disk ${disk.path}`,
+            disk.used_percent,
+            `${formatBytes(disk.free)} free of ${formatBytes(disk.total)}`
+        );
     });
 
     // Build configuration key-value pairs
@@ -578,6 +892,8 @@ async function loadClients() {
 function renderClientsTable() {
     const container = document.getElementById('clients-table');
 
+    const filteredClients = clients.filter(c => rowMatchesFilter('clients', [c.mac_address, c.name, c.description, c.bootloader_set]));
+
     if (clients.length === 0) {
         container.innerHTML = '<p style="color: var(--text-secondary); padding: 20px;">No clients yet. Add one to get started.</p>';
         return;
@@ -591,17 +907,17 @@ function renderClientsTable() {
                     <th>MAC Address</th>
                     <th>Name</th>
                     <th>Type</th>
-                    <th>Status</th>
+                    <th class="col-dot" title="Enabled / Disabled">On</th>
                     <th>Bootloader</th>
                     <th>Assigned Images</th>
                     <th>Boot Count</th>
                     <th>Last Boot</th>
-                    <th>Actions</th>
+                    <th>Quick Actions</th>
                 </tr>
             </thead>
             <tbody>
-                ${clients.map(client => `
-                    <tr>
+                ${filteredClients.map(client => `
+                    <tr class="row-clickable" onclick="editClient('${client.mac_address}')">
                         <td><code>${client.mac_address}</code></td>
                         <td>${client.name || '-'}</td>
                         <td>
@@ -609,10 +925,8 @@ function renderClientsTable() {
                                 ${client.static ? 'Static' : 'Discovered'}
                             </span>
                         </td>
-                        <td>
-                            <span class="badge ${client.enabled ? 'badge-success' : 'badge-danger'}">
-                                ${client.enabled ? 'Enabled' : 'Disabled'}
-                            </span>
+                        <td class="col-dot">
+                            <span class="status-dot ${client.enabled ? 'on' : 'off'}" title="${client.enabled ? 'Enabled' : 'Disabled'}"></span>
                         </td>
                         <td>
                             ${client.bootloader_set ?
@@ -631,12 +945,10 @@ function renderClientsTable() {
                             ${client.last_boot ? new Date(client.last_boot).toLocaleString() : 'Never'}
                             ${client.next_boot_image ? '<br><span class="badge badge-info" title="' + escapeHtml(client.next_boot_image) + '">Next: ' + escapeHtml(client.next_boot_image) + '</span>' : ''}
                         </td>
-                        <td>
+                        <td onclick="event.stopPropagation()">
                             ${!client.static ? '<button class="btn btn-success btn-sm" onclick="promoteClient(\'' + client.mac_address + '\')">Make Static</button>' : ''}
                             <button class="btn btn-success btn-sm" onclick="wakeClient('${client.mac_address}')">Wake</button>
                             <button class="btn btn-primary btn-sm" onclick="showNextBoot('${client.mac_address}')">Next Boot</button>
-                            <button class="btn btn-primary btn-sm" onclick="editClient('${client.mac_address}')">Edit & Assign Images</button>
-                            <button class="btn btn-danger btn-sm" onclick="deleteClient('${client.mac_address}')">Delete</button>
                         </td>
                     </tr>
                 `).join('')}
@@ -672,6 +984,15 @@ async function editClient(mac) {
             form.querySelector('[name="enabled"]').checked = currentClient.enabled || false;
             form.querySelector('[name="show_public_images"]').checked = currentClient.show_public_images !== false;
 
+            // BMC / Redfish
+            form.querySelector('[name="ipmi_host"]').value = currentClient.ipmi_host || '';
+            form.querySelector('[name="ipmi_port"]').value = currentClient.ipmi_port || '';
+            form.querySelector('[name="ipmi_username"]').value = currentClient.ipmi_username || '';
+            form.querySelector('[name="ipmi_password"]').value = currentClient.ipmi_password || '';
+            form.querySelector('[name="ipmi_insecure"]').checked = !!currentClient.ipmi_insecure;
+            const powerResult = document.getElementById('power-client-result');
+            if (powerResult) powerResult.textContent = '';
+
             // Populate bootloader set dropdown
             try {
                 const blRes = await authFetch(`${API_BASE}/bootloaders`);
@@ -688,6 +1009,22 @@ async function editClient(mac) {
                 console.error('Failed to load bootloader sets:', err);
             }
 
+            // Populate client group dropdown
+            try {
+                const cgRes = await authFetch(`${API_BASE}/client-groups`);
+                const cgData = await cgRes.json();
+                const cgSelect = document.getElementById('edit-client-group-select');
+                cgSelect.innerHTML = '<option value="">(none)</option>';
+                if (cgData.success && cgData.data) {
+                    for (const g of cgData.data) {
+                        const selected = currentClient.client_group_id === g.id ? 'selected' : '';
+                        cgSelect.innerHTML += `<option value="${g.id}" ${selected}>${escapeHtml(g.name)}</option>`;
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to load client groups:', err);
+            }
+
             // Populate images select using allowed_images (persisted filename list)
             const select = document.getElementById('edit-images-select');
             const allowedImages = currentClient.allowed_images || [];
@@ -699,12 +1036,49 @@ async function editClient(mac) {
 
             showModal('edit-client-modal');
             loadClientInventory(currentClient.mac_address);
+            loadClientBootHistory(currentClient.mac_address);
         } else {
             showAlert(data.error || 'Failed to load client', 'error');
         }
     } catch (err) {
         console.error('Error in editClient:', err);
         showAlert('Failed to load client', 'error');
+    }
+}
+
+async function loadClientBootHistory(mac) {
+    const container = document.getElementById('client-boot-history-list');
+    if (!container) return;
+    container.innerHTML = '<p style="color: var(--text-secondary); margin: 0;">Loading…</p>';
+    try {
+        const res = await authFetch(`${API_BASE}/boot-logs?mac=${encodeURIComponent(mac)}&limit=50`);
+        const data = await res.json();
+        if (!data.success || !data.data || data.data.length === 0) {
+            container.innerHTML = '<p style="color: var(--text-secondary); margin: 0;">No boot history for this client yet.</p>';
+            return;
+        }
+        const rows = data.data.map(entry => {
+            const when = entry.CreatedAt ? new Date(entry.CreatedAt).toLocaleString() : '-';
+            const img = entry.ImageName || '(unknown)';
+            const ok = entry.Success
+                ? '<span class="status-dot on" title="Success"></span>'
+                : '<span class="status-dot off" title="Failed"></span>';
+            const err = entry.ErrorMsg ? `<div style="color: var(--danger); font-size: 12px;">${escapeHtml(entry.ErrorMsg)}</div>` : '';
+            const ip = entry.IPAddress ? `<span style="color: var(--text-muted); font-size: 12px;">${escapeHtml(entry.IPAddress)}</span>` : '';
+            return `
+                <div style="padding: 8px 0; border-bottom: 1px solid var(--border); display: flex; gap: 10px; align-items: center;">
+                    <div style="width: 14px;">${ok}</div>
+                    <div style="flex: 1;">
+                        <div><strong>${escapeHtml(img)}</strong></div>
+                        <div style="color: var(--text-secondary); font-size: 12px;">${when} &middot; ${ip}</div>
+                        ${err}
+                    </div>
+                </div>
+            `;
+        }).join('');
+        container.innerHTML = `<div style="max-height: 300px; overflow-y: auto;">${rows}</div>`;
+    } catch (err) {
+        container.innerHTML = '<p style="color: var(--danger); margin: 0;">Failed to load boot history.</p>';
     }
 }
 
@@ -806,6 +1180,14 @@ async function showInventoryHistory() {
     } catch (err) {
         showNotification('Failed to load inventory history', 'error');
     }
+}
+
+function deleteFromEditClient() {
+    const form = document.getElementById('edit-client-form');
+    const mac = form.querySelector('[name="mac_address"]').value;
+    if (!mac) return;
+    closeModal('edit-client-modal');
+    deleteClient(mac);
 }
 
 async function deleteClient(mac) {
@@ -1055,7 +1437,9 @@ function renderImagesTable() {
         return imageSortDirection === 'asc' ? '↑' : '↓';
     };
 
-    const sortedImages = getSortedImages();
+    const sortedImages = getSortedImages().filter(img => rowMatchesFilter('images', [
+        img.name, img.filename, img.distro, img.group && img.group.name,
+    ]));
 
     const html = `
         <div class="table-scroll">
@@ -1065,36 +1449,37 @@ function renderImagesTable() {
                     <th onclick="sortImages('name')" style="cursor: pointer;">Name ${sortIcon('name')}</th>
                     <th onclick="sortImages('filename')" style="cursor: pointer;">Filename ${sortIcon('filename')}</th>
                     <th onclick="sortImages('size')" style="cursor: pointer;">Size ${sortIcon('size')}</th>
-                    <th onclick="sortImages('group')" style="cursor: pointer;">Group ${sortIcon('group')}</th>
-                    <th onclick="sortImages('status')" style="cursor: pointer;">Status ${sortIcon('status')}</th>
-                    <th onclick="sortImages('visibility')" style="cursor: pointer;">Visibility ${sortIcon('visibility')}</th>
-                    <th onclick="sortImages('boot_method')" style="cursor: pointer;">Boot Method ${sortIcon('boot_method')}</th>
                     <th onclick="sortImages('distro')" style="cursor: pointer;">Distro ${sortIcon('distro')}</th>
+                    <th onclick="sortImages('group')" style="cursor: pointer;">Group ${sortIcon('group')}</th>
+                    <th onclick="sortImages('status')" style="cursor: pointer;" class="col-dot" title="Enabled / Disabled">On ${sortIcon('status')}</th>
+                    <th onclick="sortImages('visibility')" style="cursor: pointer;" class="col-dot" title="Public / Private">Pub ${sortIcon('visibility')}</th>
+                    <th onclick="sortImages('boot_method')" style="cursor: pointer;">Boot Method ${sortIcon('boot_method')}</th>
                     <th>Operations</th>
-                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
                 ${sortedImages.map(img => `
-                    <tr>
+                    <tr class="row-clickable" onclick="showImagePropertiesModal('${img.filename}')">
                         <td>${img.name}</td>
                         <td><code>${img.filename}</code></td>
                         <td>${formatBytes(img.size)}</td>
+                        <td>
+                            ${img.extracted ?
+                                (img.distro ? '<span class="badge badge-info">'+img.distro+'</span>' : '<span class="badge badge-success">✓ Extracted</span>') :
+                                (img.extraction_error ? '<span class="badge badge-danger" title="'+img.extraction_error+'">Error</span>' : '')
+                            }
+                        </td>
                         <td>
                             ${img.group && img.group.name ?
                                 '<span class="badge badge-info">' + escapeHtml(img.group.name) + '</span>' :
                                 '<span style="color: var(--text-secondary);">-</span>'
                             }
                         </td>
-                        <td>
-                            <span class="badge ${img.enabled ? 'badge-success' : 'badge-danger'}">
-                                ${img.enabled ? 'Enabled' : 'Disabled'}
-                            </span>
+                        <td class="col-dot">
+                            <span class="status-dot ${img.enabled ? 'on' : 'off'}" title="${img.enabled ? 'Enabled' : 'Disabled'}"></span>
                         </td>
-                        <td>
-                            <span class="badge ${img.public ? 'badge-success' : 'badge-info'}">
-                                ${img.public ? 'Public' : 'Private'}
-                            </span>
+                        <td class="col-dot">
+                            <span class="status-dot ${img.public ? 'on' : 'off'}" title="${img.public ? 'Public' : 'Private'}"></span>
                         </td>
                         <td style="white-space: nowrap;">
                             ${img.boot_method === 'kernel' ?
@@ -1112,12 +1497,6 @@ function renderImagesTable() {
                                 ''
                             }
                         </td>
-                        <td>
-                            ${img.extracted ?
-                                (img.distro ? '<span class="badge badge-info">'+img.distro+'</span>' : '<span class="badge badge-success">✓ Extracted</span>') :
-                                (img.extraction_error ? '<span class="badge badge-danger" title="'+img.extraction_error+'">Error</span>' : '')
-                            }
-                        </td>
                         <td class="operations-cell">
                             ${extractionProgress[img.filename] ? `
                                 <div class="progress-container">
@@ -1132,22 +1511,6 @@ function renderImagesTable() {
                                     '<span style="color: #ff9800;">⚠ Netboot Required</span>') :
                                 (img.extracted ? '<span style="color: #4caf50;">✓ Ready</span>' : '<span style="color: #999;">Not extracted</span>')
                             )}
-                        </td>
-                        <td>
-                            ${!extractionProgress[img.filename] && !img.netboot_required ?
-                                '<button class="btn btn-success btn-sm" onclick="extractImage(\''+img.filename+'\', \''+img.name+'\')">' + (img.extracted ? 'Re-Extract' : 'Extract') + '</button>' :
-                                ''
-                            }
-                            ${img.netboot_required && !img.netboot_available ?
-                                '<button class="btn btn-warning btn-sm" onclick="downloadNetboot(\''+img.filename+'\', \''+img.name+'\')">⬇ Netboot</button>' :
-                                ''
-                            }
-                            ${extractionProgress[img.filename] ?
-                                '<button class="btn btn-sm" disabled style="opacity: 0.5;">Extracting...</button>' :
-                                ''
-                            }
-                            <button class="btn btn-info btn-sm" onclick="showImagePropertiesModal('${img.filename}')">⚙️ Properties</button>
-                            <button class="btn btn-danger btn-sm" onclick="deleteImage('${img.filename}', '${img.name}')">Delete</button>
                         </td>
                     </tr>
                 `).join('')}
@@ -1492,12 +1855,20 @@ function setupForms() {
         const formData = new FormData(e.target);
         const mac = formData.get('mac_address');
 
+        const groupIdRaw = formData.get('client_group_id');
+        const ipmiPortRaw = formData.get('ipmi_port');
         const updates = {
             name: formData.get('name'),
             description: formData.get('description'),
             enabled: formData.get('enabled') === 'on',
             show_public_images: formData.get('show_public_images') === 'on',
-            bootloader_set: formData.get('bootloader_set') || ''
+            bootloader_set: formData.get('bootloader_set') || '',
+            client_group_id: groupIdRaw ? parseInt(groupIdRaw, 10) : null,
+            ipmi_host: formData.get('ipmi_host') || '',
+            ipmi_port: ipmiPortRaw ? parseInt(ipmiPortRaw, 10) : 0,
+            ipmi_username: formData.get('ipmi_username') || '',
+            ipmi_password: formData.get('ipmi_password') || '',
+            ipmi_insecure: formData.get('ipmi_insecure') === 'on',
         };
         console.log('Updating client:', mac, updates);
 
@@ -1540,6 +1911,8 @@ function setupForms() {
     document.getElementById('theme-form').addEventListener('submit', saveTheme);
     document.getElementById('add-custom-tool-form').addEventListener('submit', createCustomTool);
     document.getElementById('add-profile-form').addEventListener('submit', createProfile);
+    const wf = document.getElementById('webhook-form');
+    if (wf) wf.addEventListener('submit', saveWebhookConfig);
 }
 
 // Theme
@@ -2447,7 +2820,8 @@ function loadUsers() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                renderUsersTable(data.data);
+                lastLoadedUsers = data.data || [];
+                renderUsersTable();
             } else {
                 document.getElementById('users-table').innerHTML =
                     `<div class="error">Error loading users: ${data.error}</div>`;
@@ -2459,12 +2833,15 @@ function loadUsers() {
         });
 }
 
+let lastLoadedUsers = [];
 function renderUsersTable(users) {
+    if (users === undefined) users = lastLoadedUsers;
     if (!users || users.length === 0) {
         document.getElementById('users-table').innerHTML =
             '<p style="color: var(--text-secondary);">No users found</p>';
         return;
     }
+    users = users.filter(u => rowMatchesFilter('users', [u.username, u.email, u.description]));
 
     let html = `
         <div class="table-scroll">
@@ -3248,10 +3625,12 @@ function renderGroupsTable() {
         return;
     }
 
-    const sortedGroups = [...groups].sort((a, b) => {
-        if (a.order !== b.order) return a.order - b.order;
-        return a.name.localeCompare(b.name);
-    });
+    const sortedGroups = [...groups]
+        .filter(g => rowMatchesFilter('image-groups', [g.name, g.description, g.parent && g.parent.name]))
+        .sort((a, b) => {
+            if (a.order !== b.order) return a.order - b.order;
+            return a.name.localeCompare(b.name);
+        });
 
     let html = `
         <div class="table-scroll">
@@ -3262,8 +3641,7 @@ function renderGroupsTable() {
                     <th>Description</th>
                     <th>Parent</th>
                     <th>Order</th>
-                    <th>Status</th>
-                    <th>Actions</th>
+                    <th class="col-dot" title="Enabled / Disabled">On</th>
                 </tr>
             </thead>
             <tbody>
@@ -3271,18 +3649,15 @@ function renderGroupsTable() {
 
     for (const group of sortedGroups) {
         const parentName = group.parent_id ? (groups.find(g => g.id === group.parent_id)?.name || 'Unknown') : '-';
-        const status = group.enabled ? '<span class="badge badge-success">Enabled</span>' : '<span class="badge badge-danger">Disabled</span>';
 
         html += `
-            <tr>
+            <tr class="row-clickable" onclick="showEditGroupModal(${group.id})">
                 <td><strong>${escapeHtml(group.name)}</strong></td>
                 <td>${escapeHtml(group.description || '-')}</td>
                 <td>${escapeHtml(parentName)}</td>
                 <td>${group.order}</td>
-                <td>${status}</td>
-                <td>
-                    <button class="btn btn-info btn-sm" onclick="showEditGroupModal(${group.id})">Edit</button>
-                    <button class="btn btn-danger btn-sm" onclick="deleteGroup(${group.id}, '${escapeHtml(group.name).replace(/'/g, "\\'")}')">Delete</button>
+                <td class="col-dot">
+                    <span class="status-dot ${group.enabled ? 'on' : 'off'}" title="${group.enabled ? 'Enabled' : 'Disabled'}"></span>
                 </td>
             </tr>
         `;
@@ -3333,6 +3708,15 @@ function showEditGroupModal(groupId) {
     }
 
     openModal('edit-group-modal');
+}
+
+function deleteFromEditGroup() {
+    const form = document.getElementById('edit-group-form');
+    const groupId = parseInt(form.elements.id.value, 10);
+    const groupName = form.elements.name.value;
+    if (!groupId) return;
+    closeModal('edit-group-modal');
+    deleteGroup(groupId, groupName);
 }
 
 async function deleteGroup(groupId, groupName) {
@@ -3449,8 +3833,52 @@ async function showImagePropertiesModal(filename) {
         groupSelect.innerHTML += `<option value="${group.id}" ${selected}>${escapeHtml(group.name)}</option>`;
     }
 
+    // Toggle action buttons based on image state
+    const extractBtn = document.getElementById('image-props-extract-btn');
+    const netbootBtn = document.getElementById('image-props-netboot-btn');
+    if (extractionProgress[filename]) {
+        extractBtn.style.display = 'inline-block';
+        extractBtn.disabled = true;
+        extractBtn.style.opacity = '0.5';
+        extractBtn.textContent = 'Extracting...';
+        netbootBtn.style.display = 'none';
+    } else if (img.netboot_required && !img.netboot_available) {
+        extractBtn.style.display = 'none';
+        netbootBtn.style.display = 'inline-block';
+    } else if (!img.netboot_required) {
+        netbootBtn.style.display = 'none';
+        extractBtn.style.display = 'inline-block';
+        extractBtn.disabled = false;
+        extractBtn.style.opacity = '';
+        extractBtn.textContent = img.extracted ? 'Re-Extract' : 'Extract';
+    } else {
+        extractBtn.style.display = 'none';
+        netbootBtn.style.display = 'none';
+    }
+
     switchPropsTab('props-general');
     openModal('image-properties-modal');
+}
+
+function extractFromProperties() {
+    const filename = document.getElementById('image-props-filename').value;
+    const name = document.getElementById('image-props-display-name').value;
+    closeModal('image-properties-modal');
+    extractImage(filename, name);
+}
+
+function deleteFromProperties() {
+    const filename = document.getElementById('image-props-filename').value;
+    const name = document.getElementById('image-props-display-name').value;
+    closeModal('image-properties-modal');
+    deleteImage(filename, name);
+}
+
+function downloadNetbootFromProperties() {
+    const filename = document.getElementById('image-props-filename').value;
+    const name = document.getElementById('image-props-display-name').value;
+    closeModal('image-properties-modal');
+    downloadNetboot(filename, name);
 }
 
 async function loadImageFileBrowser(filename) {
@@ -4028,4 +4456,405 @@ async function deletePropsImageFile(imageId, fileId) {
         showNotification(`Failed to delete file: ${err.message}`, 'error');
         console.error(err);
     }
+}
+
+// ============================================================
+// Table filter — simple client-side substring search
+// ============================================================
+
+const tableFilters = {};
+
+function applyTableFilter(key, value, renderFn) {
+    tableFilters[key] = (value || '').toLowerCase();
+    if (typeof renderFn === 'function') renderFn();
+}
+
+function rowMatchesFilter(key, values) {
+    const q = tableFilters[key];
+    if (!q) return true;
+    for (const v of values) {
+        if (v && String(v).toLowerCase().includes(q)) return true;
+    }
+    return false;
+}
+
+// ============================================================
+// CSV Import / Export — Clients
+// ============================================================
+
+function csvEscape(v) {
+    if (v === null || v === undefined) return '';
+    const s = String(v);
+    if (/[",\n\r]/.test(s)) {
+        return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+}
+
+function exportClientsCSV() {
+    if (!clients || clients.length === 0) {
+        showAlert('No clients to export', 'error');
+        return;
+    }
+    const groupsById = {};
+    (clientGroups || []).forEach(g => { groupsById[g.id] = g.name; });
+
+    const header = [
+        'mac_address', 'name', 'description', 'enabled', 'show_public_images',
+        'static', 'bootloader_set', 'client_group', 'allowed_images', 'next_boot_image',
+    ];
+    const rows = clients.map(c => [
+        c.mac_address,
+        c.name || '',
+        c.description || '',
+        c.enabled ? 'true' : 'false',
+        c.show_public_images !== false ? 'true' : 'false',
+        c.static ? 'true' : 'false',
+        c.bootloader_set || '',
+        c.client_group_id ? (groupsById[c.client_group_id] || '') : '',
+        (c.allowed_images || []).join('|'),
+        c.next_boot_image || '',
+    ]);
+    const csv = [header, ...rows].map(r => r.map(csvEscape).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    a.href = URL.createObjectURL(blob);
+    a.download = `bootimus-clients-${ts}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+}
+
+function showImportClientsModal() {
+    document.getElementById('import-clients-form').reset();
+    document.getElementById('import-clients-result').style.display = 'none';
+    showModal('import-clients-modal');
+}
+
+async function importClientsCSV() {
+    const fileInput = document.getElementById('import-clients-file');
+    const resultDiv = document.getElementById('import-clients-result');
+    if (!fileInput.files || fileInput.files.length === 0) return;
+    const fd = new FormData();
+    fd.append('file', fileInput.files[0]);
+    resultDiv.style.display = 'block';
+    resultDiv.textContent = 'Uploading…';
+    try {
+        const res = await authFetch(`${API_BASE}/clients/import`, { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!data.success) {
+            resultDiv.textContent = data.error || 'Import failed';
+            resultDiv.style.color = 'var(--danger)';
+            return;
+        }
+        const d = data.data || {};
+        const errs = (d.errors || []).length;
+        resultDiv.innerHTML = `<strong>${d.created || 0}</strong> created, <strong>${d.updated || 0}</strong> updated, <strong>${d.skipped || 0}</strong> skipped${errs ? `, <strong style="color:var(--danger)">${errs}</strong> errors` : ''}.` +
+            (errs ? `<div style="margin-top:8px;">${(d.errors || []).slice(0, 10).map(e => `<div>${escapeHtml(e)}</div>`).join('')}${errs > 10 ? `<div>…and ${errs - 10} more</div>` : ''}</div>` : '');
+        resultDiv.style.color = '';
+        await loadClients();
+    } catch (err) {
+        resultDiv.textContent = 'Import failed: ' + err.message;
+        resultDiv.style.color = 'var(--danger)';
+    }
+}
+
+// ============================================================
+// Client Groups
+// ============================================================
+
+let clientGroups = [];
+
+function switchClientsSubtab(name) {
+    document.querySelectorAll('#clients-tab .subtab').forEach(b => b.classList.toggle('active', b.dataset.subtab === name));
+    document.getElementById('clients-subtab').style.display = name === 'clients' ? '' : 'none';
+    document.getElementById('client-groups-subtab').style.display = name === 'client-groups' ? '' : 'none';
+    if (name === 'client-groups') loadClientGroups();
+}
+
+function switchImagesSubtab(name) {
+    document.querySelectorAll('#images-tab .subtab').forEach(b => b.classList.toggle('active', b.dataset.subtab === name));
+    document.getElementById('images-subtab').style.display = name === 'images' ? '' : 'none';
+    document.getElementById('image-groups-subtab').style.display = name === 'image-groups' ? '' : 'none';
+    if (name === 'image-groups') loadGroups();
+}
+
+async function loadClientGroups() {
+    try {
+        const res = await authFetch(`${API_BASE}/client-groups`);
+        const data = await res.json();
+        if (!data.success) {
+            document.getElementById('client-groups-table').innerHTML = '<p class="alert alert-error">Failed to load client groups</p>';
+            return;
+        }
+        clientGroups = data.data || [];
+        renderClientGroupsTable();
+    } catch (err) {
+        console.error('Failed to load client groups:', err);
+    }
+}
+
+function renderClientGroupsTable() {
+    const container = document.getElementById('client-groups-table');
+    if (clientGroups.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-secondary); padding: 20px;">No client groups yet. Click "+ Add Client Group" to create one.</p>';
+        return;
+    }
+    const rows = clientGroups
+        .filter(g => rowMatchesFilter('client-groups', [g.name, g.description, g.wol_broadcast_addr]))
+        .map(g => `
+        <tr class="row-clickable" onclick="showEditClientGroupModal(${g.id})">
+            <td><strong>${escapeHtml(g.name)}</strong></td>
+            <td>${escapeHtml(g.description || '-')}</td>
+            <td>${g.member_count}</td>
+            <td class="col-dot"><span class="status-dot ${g.enabled ? 'on' : 'off'}" title="${g.enabled ? 'Enabled' : 'Disabled'}"></span></td>
+            <td>${g.stagger_delay_millis || 0} ms</td>
+            <td>${escapeHtml(g.wol_broadcast_addr || '(default)')}</td>
+        </tr>
+    `).join('');
+    container.innerHTML = `
+        <div class="table-scroll">
+        <table>
+            <thead><tr>
+                <th>Name</th><th>Description</th><th>Members</th>
+                <th class="col-dot" title="Enabled / Disabled">On</th>
+                <th>Stagger</th><th>WOL Broadcast</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+        </table>
+        </div>
+    `;
+}
+
+function showAddClientGroupModal() {
+    document.getElementById('add-client-group-form').reset();
+    showModal('add-client-group-modal');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const addForm = document.getElementById('add-client-group-form');
+    if (addForm) {
+        addForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fd = new FormData(e.target);
+            const body = {
+                name: fd.get('name'),
+                description: fd.get('description') || '',
+                enabled: fd.get('enabled') === 'on',
+            };
+            try {
+                const res = await authFetch(`${API_BASE}/client-groups`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                const data = await res.json();
+                if (data.success) {
+                    closeModal('add-client-group-modal');
+                    showAlert('Client group created', 'success');
+                    await loadClientGroups();
+                    if (data.data && data.data.id) showEditClientGroupModal(data.data.id);
+                } else {
+                    showAlert(data.error || 'Failed to create', 'error');
+                }
+            } catch (err) {
+                showAlert('Failed to create client group', 'error');
+            }
+        });
+    }
+
+    const editForm = document.getElementById('edit-client-group-form');
+    if (editForm) {
+        editForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fd = new FormData(e.target);
+            const id = parseInt(fd.get('id'), 10);
+            const allowed = Array.from(document.getElementById('cg-allowed-images').selectedOptions).map(o => o.value);
+            const members = Array.from(document.getElementById('cg-members').selectedOptions).map(o => o.value);
+            const body = {
+                name: fd.get('name'),
+                description: fd.get('description') || '',
+                enabled: fd.get('enabled') === 'on',
+                wol_broadcast_addr: fd.get('wol_broadcast_addr') || '',
+                stagger_delay_millis: parseInt(fd.get('stagger_delay_millis') || '0', 10),
+                bootloader_set: fd.get('bootloader_set') || '',
+                allowed_images: allowed,
+                ipmi_port: parseInt(fd.get('ipmi_port') || '0', 10),
+                ipmi_username: fd.get('ipmi_username') || '',
+                ipmi_password: fd.get('ipmi_password') || '',
+                ipmi_insecure: fd.get('ipmi_insecure') === 'on',
+            };
+            try {
+                const res = await authFetch(`${API_BASE}/client-groups/update?id=${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                const data = await res.json();
+                if (!data.success) { showAlert(data.error || 'Failed to save', 'error'); return; }
+
+                const current = await fetchGroupMembers(id);
+                const currentSet = new Set(current);
+                const targetSet = new Set(members);
+                const toAdd = members.filter(m => !currentSet.has(m));
+                const toRemove = current.filter(m => !targetSet.has(m));
+                for (const mac of toAdd) {
+                    await authFetch(`${API_BASE}/client-groups/membership`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ mac_address: mac, group_id: id }),
+                    });
+                }
+                for (const mac of toRemove) {
+                    await authFetch(`${API_BASE}/client-groups/membership`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ mac_address: mac, group_id: null }),
+                    });
+                }
+
+                showAlert('Client group saved', 'success');
+                closeModal('edit-client-group-modal');
+                await loadClientGroups();
+            } catch (err) {
+                console.error(err);
+                showAlert('Failed to save client group', 'error');
+            }
+        });
+    }
+});
+
+async function fetchGroupMembers(id) {
+    try {
+        const res = await authFetch(`${API_BASE}/client-groups/get?id=${id}`);
+        const data = await res.json();
+        if (data.success && data.data && data.data.clients) {
+            return data.data.clients.map(c => c.mac_address);
+        }
+    } catch (err) { console.error(err); }
+    return [];
+}
+
+async function showEditClientGroupModal(id) {
+    try {
+        const res = await authFetch(`${API_BASE}/client-groups/get?id=${id}`);
+        const data = await res.json();
+        if (!data.success || !data.data) { showAlert('Failed to load group', 'error'); return; }
+        const g = data.data;
+
+        const form = document.getElementById('edit-client-group-form');
+        form.elements.id.value = g.id;
+        form.elements.name.value = g.name;
+        form.elements.description.value = g.description || '';
+        form.elements.enabled.checked = !!g.enabled;
+        form.elements.wol_broadcast_addr.value = g.wol_broadcast_addr || '';
+        form.elements.stagger_delay_millis.value = g.stagger_delay_millis || 0;
+        form.elements.ipmi_port.value = g.ipmi_port || '';
+        form.elements.ipmi_username.value = g.ipmi_username || '';
+        form.elements.ipmi_password.value = g.ipmi_password || '';
+        form.elements.ipmi_insecure.checked = !!g.ipmi_insecure;
+        document.getElementById('cg-props-name').textContent = g.name;
+
+        try {
+            const blRes = await authFetch(`${API_BASE}/bootloaders`);
+            const blData = await blRes.json();
+            const sel = document.getElementById('cg-bootloader-select');
+            sel.innerHTML = '<option value="">Default (global setting)</option>';
+            if (blData.success && blData.data && blData.data.sets) {
+                for (const set of blData.data.sets) {
+                    const isSel = g.bootloader_set === set.name ? 'selected' : '';
+                    sel.innerHTML += `<option value="${escapeHtml(set.name)}" ${isSel}>${escapeHtml(set.name)}</option>`;
+                }
+            }
+        } catch (err) {}
+
+        if (!images || images.length === 0) await loadImages();
+        const allowedSel = document.getElementById('cg-allowed-images');
+        const groupAllowed = new Set(g.allowed_images || []);
+        allowedSel.innerHTML = images.map(img => `<option value="${img.filename}" ${groupAllowed.has(img.filename) ? 'selected' : ''}>${escapeHtml(img.name)}</option>`).join('');
+
+        if (!clients || clients.length === 0) await loadClients();
+        const membersSel = document.getElementById('cg-members');
+        const memberMACs = new Set((g.clients || []).map(c => c.mac_address));
+        membersSel.innerHTML = clients.map(c => {
+            const label = `${c.mac_address}${c.name ? ' — ' + escapeHtml(c.name) : ''}`;
+            return `<option value="${c.mac_address}" ${memberMACs.has(c.mac_address) ? 'selected' : ''}>${label}</option>`;
+        }).join('');
+
+        const bulkImgSel = document.getElementById('cg-bulk-nextboot-image');
+        bulkImgSel.innerHTML = '<option value="">(clear)</option>' + images.map(img => `<option value="${img.filename}">${escapeHtml(img.name)}</option>`).join('');
+
+        await loadGroupSchedules(g.id);
+        updateScheduleActionHint();
+
+        openModal('edit-client-group-modal');
+    } catch (err) {
+        console.error(err);
+        showAlert('Failed to load client group', 'error');
+    }
+}
+
+function deleteFromEditClientGroup() {
+    const form = document.getElementById('edit-client-group-form');
+    const id = parseInt(form.elements.id.value, 10);
+    const name = form.elements.name.value;
+    if (!id) return;
+    if (!confirm(`Delete client group "${name}"? Members will be detached (not deleted).`)) return;
+    (async () => {
+        try {
+            const res = await authFetch(`${API_BASE}/client-groups/delete?id=${id}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (data.success) {
+                closeModal('edit-client-group-modal');
+                showAlert('Client group deleted', 'success');
+                await loadClientGroups();
+            } else {
+                showAlert(data.error || 'Failed to delete', 'error');
+            }
+        } catch (err) {
+            showAlert('Failed to delete client group', 'error');
+        }
+    })();
+}
+
+async function bulkWakeClientGroup() {
+    const id = parseInt(document.getElementById('edit-client-group-form').elements.id.value, 10);
+    if (!id) return;
+    try {
+        const res = await authFetch(`${API_BASE}/client-groups/wake?id=${id}`, { method: 'POST' });
+        const data = await res.json();
+        showAlert(data.message || (data.success ? 'Wake sent' : 'Wake failed'), data.success ? 'success' : 'error');
+    } catch (err) { showAlert('Failed to send bulk wake', 'error'); }
+}
+
+async function bulkSetNextBootClientGroup() {
+    const id = parseInt(document.getElementById('edit-client-group-form').elements.id.value, 10);
+    const image = document.getElementById('cg-bulk-nextboot-image').value;
+    if (!id) return;
+    if (!image) { showAlert('Pick an image first', 'error'); return; }
+    try {
+        const res = await authFetch(`${API_BASE}/client-groups/next-boot?id=${id}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image_filename: image }),
+        });
+        const data = await res.json();
+        showAlert(data.message || (data.success ? 'Next boot set' : 'Failed'), data.success ? 'success' : 'error');
+    } catch (err) { showAlert('Failed to set bulk next boot', 'error'); }
+}
+
+async function bulkClearNextBootClientGroup() {
+    const id = parseInt(document.getElementById('edit-client-group-form').elements.id.value, 10);
+    if (!id) return;
+    try {
+        const res = await authFetch(`${API_BASE}/client-groups/next-boot?id=${id}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image_filename: '' }),
+        });
+        const data = await res.json();
+        showAlert(data.message || (data.success ? 'Cleared' : 'Failed'), data.success ? 'success' : 'error');
+    } catch (err) { showAlert('Failed to clear bulk next boot', 'error'); }
 }

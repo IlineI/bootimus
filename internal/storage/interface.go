@@ -59,8 +59,28 @@ type Storage interface {
 	DeleteImageGroup(id uint) error
 	ListImagesByGroup(groupID uint) ([]*models.Image, error)
 
+	ListClientGroups() ([]*models.ClientGroup, error)
+	GetClientGroup(id uint) (*models.ClientGroup, error)
+	GetClientGroupByName(name string) (*models.ClientGroup, error)
+	CreateClientGroup(group *models.ClientGroup) error
+	UpdateClientGroup(id uint, group *models.ClientGroup) error
+	DeleteClientGroup(id uint) error
+	ListClientsInGroup(groupID uint) ([]*models.Client, error)
+	SetClientGroup(mac string, groupID *uint) error
+
 	GetMenuTheme() (*models.MenuTheme, error)
 	UpdateMenuTheme(theme *models.MenuTheme) error
+
+	GetWebhookConfig() (*models.WebhookConfig, error)
+	UpdateWebhookConfig(cfg *models.WebhookConfig) error
+
+	ListScheduledTasks() ([]*models.ScheduledTask, error)
+	ListScheduledTasksByGroup(groupID uint) ([]*models.ScheduledTask, error)
+	GetScheduledTask(id uint) (*models.ScheduledTask, error)
+	CreateScheduledTask(task *models.ScheduledTask) error
+	UpdateScheduledTask(id uint, task *models.ScheduledTask) error
+	DeleteScheduledTask(id uint) error
+	RecordScheduledTaskRun(id uint, status, errorMsg string) error
 
 	ListDistroProfiles() ([]*models.DistroProfile, error)
 	GetDistroProfile(profileID string) (*models.DistroProfile, error)
@@ -76,6 +96,7 @@ type Storage interface {
 	UpdateClientBootStats(macAddress string) error
 	UpdateImageBootStats(imageName string) error
 	GetBootLogs(limit int) ([]models.BootLog, error)
+	GetBootLogsByMAC(macAddress string, limit int) ([]models.BootLog, error)
 
 	SaveHardwareInventory(inventory *models.HardwareInventory) error
 	GetLatestHardwareInventory(mac string) (*models.HardwareInventory, error)

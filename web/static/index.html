@@ -171,6 +171,13 @@
         .tab-content.active > .card { display: flex; flex-direction: column; }
         .card-body { flex-shrink: 0; }
         .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 0 12px 12px; flex-shrink: 0; }
+        .toolbar-filter {
+            margin-left: auto; min-width: 200px; max-width: 280px;
+            padding: 6px 10px; font-size: 13px;
+            background: var(--bg-input, var(--bg-primary)); color: var(--text-primary);
+            border: 1px solid var(--border); border-radius: var(--radius-sm);
+        }
+        .toolbar-filter:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-light); }
 
         /* Stats row */
         .stats { display: flex; gap: 10px; margin-bottom: 12px; }
@@ -191,6 +198,22 @@
         .tabs { display: none; }
         .tab-content { display: none; }
 
+        /* In-page subtabs (e.g., Image Groups / Client Groups) */
+        .subtabs {
+            display: flex; gap: 4px;
+            border-bottom: 1px solid var(--border);
+            margin: 4px 12px 16px;
+        }
+        .subtab {
+            padding: 10px 16px; background: none; border: none;
+            color: var(--text-secondary); cursor: pointer;
+            font-size: 14px; font-weight: 500;
+            border-bottom: 2px solid transparent; margin-bottom: -1px;
+            transition: color 0.15s, border-color 0.15s;
+        }
+        .subtab:hover { color: var(--text-primary); }
+        .subtab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
         /* Cards - white, subtle shadow, NO border */
         .card {
             background: var(--bg-secondary);
@@ -207,9 +230,22 @@
         .card > button, .card > p, .card > form { margin: 0 12px 8px; }
 
         /* Tables */
-        table { border-collapse: collapse; font-size: 13px; }
+        table { border-collapse: collapse; font-size: 13px; width: 100%; }
         .table-scroll table { min-width: 100%; width: max-content; }
         th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+        .table-scroll tbody tr:nth-child(odd) { background: rgba(0, 0, 0, 0.02); }
+        [data-theme="dark"] .table-scroll tbody tr:nth-child(odd) { background: rgba(255, 255, 255, 0.025); }
+        .table-scroll tbody tr.row-clickable { cursor: pointer; }
+        .table-scroll tbody tr.row-clickable:hover { background: var(--accent-light); }
+
+        /* Traffic-light status dots — compact alternative to text badges */
+        .status-dot {
+            display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+            vertical-align: middle;
+        }
+        .status-dot.on  { background: #22c55e; box-shadow: 0 0 6px rgba(34, 197, 94, 0.45); }
+        .status-dot.off { background: #ef4444; box-shadow: 0 0 6px rgba(239, 68, 68, 0.35); }
+        .col-dot { text-align: center; width: 1%; }
         th {
             background: var(--bg-tertiary); color: var(--text-secondary);
             font-weight: 600; font-size: 11px; text-transform: uppercase;
@@ -248,6 +284,19 @@
             backdrop-filter: blur(6px);
         }
         .modal.active { display: flex; align-items: center; justify-content: center; }
+
+        /* Slide-in side panel variant — anchors to the right edge, full height,
+           transforms in from off-screen. Apply alongside .modal. */
+        .modal.slide-panel.active { justify-content: flex-end; align-items: stretch; }
+        .modal.slide-panel .modal-content {
+            max-width: 560px; width: 100%; max-height: 100vh; height: 100vh;
+            border-radius: 0; margin: 0;
+            transform: translateX(100%);
+            transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: -8px 0 24px rgba(0, 0, 0, 0.35);
+        }
+        .modal.slide-panel.active .modal-content { transform: translateX(0); }
+
         .modal-content {
             background: var(--bg-secondary); padding: 28px; border-radius: var(--radius);
             max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto;
@@ -340,22 +389,29 @@
         .rs-label { font-size: 14px; color: var(--text-secondary); font-weight: 500; }
         .rs-value { font-size: 18px; font-weight: 600; color: var(--text-primary); }
 
-        /* Resource cards - individual white cards with big colored values */
+        /* Resource cards - ring-gauge style */
         .res-grid {
             display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;
         }
         .res-card {
-            background: var(--bg-secondary); padding: 22px 24px; border-radius: var(--radius);
-            box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 8px;
+            background: var(--bg-secondary); padding: 24px 20px 22px; border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            display: flex; flex-direction: column; align-items: center; gap: 14px;
             border: none;
-            transition: box-shadow 0.2s;
+            transition: box-shadow 0.2s, transform 0.2s;
         }
-        .res-card:hover { box-shadow: var(--shadow-md); }
-        .res-label { font-size: 15px; color: var(--text-secondary); font-weight: 500; }
-        .res-big { font-size: 36px; font-weight: 700; line-height: 1.1; letter-spacing: -0.5px; }
-        .res-bar { width: 100%; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; margin-top: 4px; }
-        .res-bar-fill { height: 100%; border-radius: 2px; transition: width 0.4s ease; }
-        .res-detail { font-size: 14px; color: var(--text-secondary); margin-top: 2px; }
+        .res-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+        .res-label { font-size: 14px; color: var(--text-secondary); font-weight: 500; text-align: center; letter-spacing: 0.2px; text-transform: uppercase; }
+        .res-gauge { position: relative; width: 128px; height: 128px; }
+        .res-gauge svg { width: 100%; height: 100%; display: block; overflow: visible; }
+        .res-gauge-track { stroke: var(--border); }
+        .res-gauge-fill { transition: stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1); filter: drop-shadow(0 0 6px currentColor); }
+        .res-gauge-text {
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 24px; font-weight: 700; letter-spacing: -0.5px;
+        }
+        .res-detail { font-size: 13px; color: var(--text-secondary); text-align: center; line-height: 1.4; }
 
         /* Info sections - side by side at bottom */
         .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
@@ -421,12 +477,23 @@
         .table-scroll {
             overflow: auto;
             flex: 1;
+            min-height: 0;
             scrollbar-width: thin;
         }
-        .table-scroll::-webkit-scrollbar { height: 12px; }
+        .table-scroll::-webkit-scrollbar { height: 12px; width: 12px; }
         .table-scroll::-webkit-scrollbar-track { background: var(--bg-tertiary); }
         .table-scroll::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: 6px; }
         .table-scroll::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
+
+        /* Pin both scrollbars inside the viewport when a tab's main content
+           is a wide table. Without this, a tall table pushes its horizontal
+           scrollbar off-screen because the whole tab scrolls vertically. */
+        .tab-content.active:has(.table-scroll) { overflow: hidden; }
+        .tab-content.active:has(.table-scroll) > .card { flex: 1; min-height: 0; }
+        /* Every wrapper between .card and .table-scroll must be a flex column
+           so heights propagate. This catches render-target divs (#images-table)
+           and subtab wrappers (#images-subtab, #clients-subtab) transparently. */
+        .card :has(.table-scroll) { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 
         @media (max-width: 1200px) {
             .stat-card { gap: 2px; }
@@ -509,20 +576,22 @@
                 <div class="nav-group">
                     <span class="nav-group-label">Overview</span>
                     <button class="nav-item active" data-tab="server"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> Server Info</button>
-                    <button class="nav-item" data-tab="clients"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg> Clients</button>
-                    <button class="nav-item" data-tab="images"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg> Images</button>
                 </div>
                 <div class="nav-group">
                     <span class="nav-group-label">Management</span>
-                    <button class="nav-item" data-tab="groups"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> Groups</button>
+                    <button class="nav-item" data-tab="images"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg> Images</button>
                     <button class="nav-item" data-tab="public-files"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Public Files</button>
-                    <button class="nav-item" data-tab="users"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Users</button>
                 </div>
                 <div class="nav-group">
                     <span class="nav-group-label">Boot</span>
                     <button class="nav-item" data-tab="bootloaders"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg> Bootloaders</button>
                     <button class="nav-item" data-tab="tools"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg> Tools</button>
                     <button class="nav-item" data-tab="profiles"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg> Distro Profiles</button>
+                </div>
+                <div class="nav-group">
+                    <span class="nav-group-label">Access</span>
+                    <button class="nav-item" data-tab="clients"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg> Clients</button>
+                    <button class="nav-item" data-tab="users"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Users</button>
                 </div>
                 <div class="nav-group">
                     <span class="nav-group-label">System</span>
@@ -575,7 +644,6 @@
                     <button class="tab active" data-tab="server">Server Info</button>
                     <button class="tab" data-tab="clients">Clients</button>
                     <button class="tab" data-tab="images">Images</button>
-                    <button class="tab" data-tab="groups">Groups</button>
                     <button class="tab" data-tab="public-files">Public Files</button>
                     <button class="tab" data-tab="users">Users</button>
                     <button class="tab" data-tab="tools">Tools</button>
@@ -598,18 +666,43 @@
         <!-- Clients Tab -->
         <div id="clients-tab" class="tab-content">
             <div class="card">
-                <h2>Client Management</h2>
-                <p style="color: var(--text-secondary); margin: 0 12px 8px; font-size: 13px;">
-                    Manage PXE boot clients. Discovered clients appear automatically when they connect.
-                </p>
-                <div class="toolbar">
-                    <button class="btn btn-primary" onclick="showAddClientModal()">+ Add Client</button>
-                    <button class="btn btn-sm" onclick="loadClients()">Refresh</button>
-                    <button class="btn btn-sm btn-success" id="clients-autorefresh-btn" onclick="toggleClientsAutoRefresh()">Auto-Refresh: Off</button>
+                <div class="subtabs">
+                    <button class="subtab active" data-subtab="clients" onclick="switchClientsSubtab('clients')">Clients</button>
+                    <button class="subtab" data-subtab="client-groups" onclick="switchClientsSubtab('client-groups')">Client Groups</button>
                 </div>
-                <div id="clients-table" class="loading">
-                    <div class="spinner"></div>
-                    Loading clients...
+
+                <div id="clients-subtab">
+                    <h2>Client Management</h2>
+                    <p style="color: var(--text-secondary); margin: 0 12px 8px; font-size: 13px;">
+                        Manage PXE boot clients. Discovered clients appear automatically when they connect.
+                    </p>
+                    <div class="toolbar">
+                        <button class="btn btn-primary" onclick="showAddClientModal()">+ Add Client</button>
+                        <button class="btn btn-sm" onclick="loadClients()">Refresh</button>
+                        <button class="btn btn-sm btn-success" id="clients-autorefresh-btn" onclick="toggleClientsAutoRefresh()">Auto-Refresh: Off</button>
+                        <button class="btn btn-sm" onclick="exportClientsCSV()">Export CSV</button>
+                        <button class="btn btn-sm" onclick="showImportClientsModal()">Import CSV</button>
+                        <input type="search" class="toolbar-filter" placeholder="Filter clients…" oninput="applyTableFilter('clients', this.value, renderClientsTable)">
+                    </div>
+                    <div id="clients-table" class="loading">
+                        <div class="spinner"></div>
+                        Loading clients...
+                    </div>
+                </div>
+
+                <div id="client-groups-subtab" style="display: none;">
+                    <h2>Client Groups</h2>
+                    <p style="color: var(--text-secondary); margin: 0 12px 8px; font-size: 13px;">
+                        Group clients by location, role, or fleet. Bulk wake all members, set a next-boot image on all, and overlay assigned images.
+                    </p>
+                    <div class="toolbar">
+                        <button class="btn btn-primary" onclick="showAddClientGroupModal()">+ Add Client Group</button>
+                        <input type="search" class="toolbar-filter" placeholder="Filter groups…" oninput="applyTableFilter('client-groups', this.value, renderClientGroupsTable)">
+                    </div>
+                    <div id="client-groups-table" class="loading">
+                        <div class="spinner"></div>
+                        Loading client groups...
+                    </div>
                 </div>
             </div>
         </div>
@@ -617,35 +710,41 @@
         <!-- Images Tab -->
         <div id="images-tab" class="tab-content">
             <div class="card">
-                <h2>Image Management</h2>
-                <p style="color: var(--text-secondary); margin: 0 12px 8px; font-size: 13px;">
-                    Upload, download, and manage OS images available for PXE booting.
-                </p>
-                <div class="toolbar">
-                    <button class="btn btn-primary" onclick="showUploadModal()">📤 Upload ISO</button>
-                    <button class="btn btn-primary" onclick="showDownloadModal()">⬇️ Download ISO</button>
-                    <button class="btn btn-success" onclick="scanImages()">🔍 Scan for ISOs</button>
+                <div class="subtabs">
+                    <button class="subtab active" data-subtab="images" onclick="switchImagesSubtab('images')">Images</button>
+                    <button class="subtab" data-subtab="image-groups" onclick="switchImagesSubtab('image-groups')">Image Groups</button>
                 </div>
-                <div id="images-table" class="loading">
-                    <div class="spinner"></div>
-                    Loading images...
-                </div>
-            </div>
-        </div>
 
-        <!-- Groups Tab -->
-        <div id="groups-tab" class="tab-content">
-            <div class="card">
-                <h2>Image Groups</h2>
-                <p style="color: var(--text-secondary); margin: 0 12px 8px; font-size: 13px;">
-                    Organise images into groups and subgroups for the PXE boot menu.
-                </p>
-                <div class="toolbar">
-                    <button class="btn btn-primary" onclick="showAddGroupModal()">+ Add Group</button>
+                <div id="images-subtab">
+                    <h2>Image Management</h2>
+                    <p style="color: var(--text-secondary); margin: 0 12px 8px; font-size: 13px;">
+                        Upload, download, and manage OS images available for PXE booting.
+                    </p>
+                    <div class="toolbar">
+                        <button class="btn btn-primary" onclick="showUploadModal()">📤 Upload ISO</button>
+                        <button class="btn btn-primary" onclick="showDownloadModal()">⬇️ Download ISO</button>
+                        <button class="btn btn-success" onclick="scanImages()">🔍 Scan for ISOs</button>
+                        <input type="search" class="toolbar-filter" placeholder="Filter images…" oninput="applyTableFilter('images', this.value, renderImagesTable)">
+                    </div>
+                    <div id="images-table" class="loading">
+                        <div class="spinner"></div>
+                        Loading images...
+                    </div>
                 </div>
-                <div id="groups-table" class="loading">
-                    <div class="spinner"></div>
-                    Loading groups...
+
+                <div id="image-groups-subtab" style="display: none;">
+                    <h2>Image Groups</h2>
+                    <p style="color: var(--text-secondary); margin: 0 12px 8px; font-size: 13px;">
+                        Organise images into groups and subgroups for the PXE boot menu.
+                    </p>
+                    <div class="toolbar">
+                        <button class="btn btn-primary" onclick="showAddGroupModal()">+ Add Image Group</button>
+                        <input type="search" class="toolbar-filter" placeholder="Filter groups…" oninput="applyTableFilter('image-groups', this.value, renderGroupsTable)">
+                    </div>
+                    <div id="groups-table" class="loading">
+                        <div class="spinner"></div>
+                        Loading groups...
+                    </div>
                 </div>
             </div>
         </div>
@@ -676,6 +775,7 @@
                 </p>
                 <div class="toolbar">
                     <button class="btn btn-primary" onclick="showAddUserModal()">+ Add User</button>
+                    <input type="search" class="toolbar-filter" placeholder="Filter users…" oninput="applyTableFilter('users', this.value, renderUsersTable)">
                 </div>
                 <div id="users-table" class="loading">
                     <div class="spinner"></div>
@@ -759,6 +859,56 @@
                     </div>
                 </form>
             </div>
+            <div class="card" style="margin-top: 20px;">
+                <h2>Webhook</h2>
+                <p style="color: var(--text-secondary); margin: 0 12px 16px; font-size: 13px;">
+                    POST a JSON payload to a URL when PXE events happen. Fire-and-forget, 10s timeout, no retries.
+                </p>
+                <form id="webhook-form" style="padding: 0 12px 12px;">
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" id="webhook-enabled">
+                        <label for="webhook-enabled">Enable outbound webhook</label>
+                    </div>
+                    <div class="form-group">
+                        <label>Webhook URL</label>
+                        <input type="url" id="webhook-url" placeholder="https://example.com/bootimus-hook">
+                    </div>
+                    <div class="form-group">
+                        <label>Events</label>
+                        <div class="form-group checkbox-group" style="margin: 4px 0;">
+                            <input type="checkbox" id="webhook-on-boot-started">
+                            <label for="webhook-on-boot-started"><code>boot.started</code> — a client began booting an image</label>
+                        </div>
+                        <div class="form-group checkbox-group" style="margin: 4px 0;">
+                            <input type="checkbox" id="webhook-on-client-discovered">
+                            <label for="webhook-on-client-discovered"><code>client.discovered</code> — a new MAC connected for the first time</label>
+                        </div>
+                        <div class="form-group checkbox-group" style="margin: 4px 0;">
+                            <input type="checkbox" id="webhook-on-inventory-updated">
+                            <label for="webhook-on-inventory-updated"><code>client.inventory_updated</code> — hardware info refreshed for an existing client</label>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button type="submit" class="btn btn-primary">Save Webhook</button>
+                        <button type="button" class="btn" onclick="testWebhook()">Send Test</button>
+                        <span id="webhook-test-result" style="align-self: center; font-size: 13px;"></span>
+                    </div>
+                </form>
+            </div>
+
+            <div class="card" style="margin-top: 20px;">
+                <h2>Backup</h2>
+                <p style="color: var(--text-secondary); margin-bottom: 16px;">
+                    Download a <code>.tar.gz</code> of the bootimus data directory: database, bootloader configuration, custom bootloader sets, and settings. ISOs and downloaded tool binaries are excluded (they're reproducible).
+                </p>
+                <div style="display: flex; gap: 10px; padding: 0 12px 12px;">
+                    <button class="btn btn-primary" onclick="downloadBackup()">⬇ Download Backup</button>
+                </div>
+                <p style="color: var(--text-muted); font-size: 12px; padding: 0 12px 12px; margin: 0;">
+                    Restore is manual: stop bootimus, extract the tarball over the data directory, start bootimus.
+                </p>
+            </div>
+
             <div class="card" style="margin-top: 20px;">
                 <h2>USB Boot Images</h2>
                 <p style="color: var(--text-secondary); margin-bottom: 20px;">
@@ -871,7 +1021,7 @@
         </div>
     </div>
 
-    <div id="edit-client-modal" class="modal">
+    <div id="edit-client-modal" class="modal slide-panel">
         <div class="modal-content">
             <div class="modal-header">
                 <h2>Edit Client</h2>
@@ -905,13 +1055,63 @@
                     <small style="color: var(--text-secondary);">Override the global bootloader set for this client.</small>
                 </div>
                 <div class="form-group">
+                    <label>Client Group</label>
+                    <select name="client_group_id" id="edit-client-group-select">
+                        <option value="">(none)</option>
+                    </select>
+                    <small style="color: var(--text-secondary);">Group overlay: inherits allowed images and participates in bulk actions.</small>
+                </div>
+
+                <details style="margin-bottom: 12px;">
+                    <summary style="cursor: pointer; font-weight: 500; padding: 6px 0;">BMC / Redfish (Power Control)</summary>
+                    <p style="color: var(--text-muted); font-size: 12px; margin: 4px 0 10px 0;">
+                        Blank username/password/port inherit from the client group. Host is always per-client (each BMC has its own IP).
+                    </p>
+                    <div class="form-group">
+                        <label>BMC Host / IP</label>
+                        <input type="text" name="ipmi_host" placeholder="e.g. 10.0.0.100">
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div class="form-group">
+                            <label>Port</label>
+                            <input type="number" name="ipmi_port" min="1" max="65535" placeholder="443">
+                        </div>
+                        <div class="form-group checkbox-group" style="align-self: end; padding: 6px 0;">
+                            <input type="checkbox" name="ipmi_insecure" id="edit-ipmi-insecure">
+                            <label for="edit-ipmi-insecure">Skip TLS verify</label>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div class="form-group">
+                            <label>Username</label>
+                            <input type="text" name="ipmi_username" autocomplete="off">
+                        </div>
+                        <div class="form-group">
+                            <label>Password</label>
+                            <input type="password" name="ipmi_password" autocomplete="off">
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px;">
+                        <button type="button" class="btn btn-sm btn-success" onclick="powerClient('On')">Power On</button>
+                        <button type="button" class="btn btn-sm btn-danger" onclick="powerClient('ForceOff')">Force Off</button>
+                        <button type="button" class="btn btn-sm" onclick="powerClient('GracefulShutdown')">Graceful Off</button>
+                        <button type="button" class="btn btn-sm" onclick="powerClient('ForceRestart')">Restart</button>
+                        <button type="button" class="btn btn-sm" onclick="powerStatusClient()">Status</button>
+                    </div>
+                    <div id="power-client-result" style="font-size: 12px; color: var(--text-secondary);"></div>
+                </details>
+                <div class="form-group">
                     <label>Assigned Images</label>
                     <select name="images" multiple size="8" id="edit-images-select">
                     </select>
                     <small style="color: var(--text-secondary);">Hold Ctrl/Cmd to select multiple. Public images are shown separately if enabled above.</small>
                 </div>
-                <button type="submit" class="btn btn-primary">Update Client</button>
-                <button type="button" class="btn" onclick="closeModal('edit-client-modal')">Cancel</button>
+                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border); display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                    <button type="button" class="btn btn-danger" onclick="deleteFromEditClient()">Delete</button>
+                    <div style="flex: 1;"></div>
+                    <button type="button" class="btn" onclick="closeModal('edit-client-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Update Client</button>
+                </div>
             </form>
             <div id="client-hardware-info" style="display:none; margin-top: 20px; border-top: 1px solid var(--border); padding-top: 16px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -919,6 +1119,13 @@
                     <button type="button" class="btn btn-sm" onclick="showInventoryHistory()">View History</button>
                 </div>
                 <div id="client-hw-details"></div>
+            </div>
+
+            <div id="client-boot-history" style="margin-top: 20px; border-top: 1px solid var(--border); padding-top: 16px;">
+                <h3 style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px;">Boot History</h3>
+                <div id="client-boot-history-list" style="font-size: 13px;">
+                    <p style="color: var(--text-secondary); margin: 0;">Loading…</p>
+                </div>
             </div>
         </div>
     </div>
@@ -1402,7 +1609,7 @@
     </div>
 
     <!-- Image Properties Modal -->
-    <div id="image-properties-modal" class="modal">
+    <div id="image-properties-modal" class="modal slide-panel">
         <div class="modal-content" style="max-width: 1000px;">
             <div class="modal-header">
                 <h2>Image Properties: <span id="image-props-name"></span></h2>
@@ -1500,8 +1707,18 @@
                 <div class="form-group">
                     <label>Auto-Install Script</label>
                     <textarea id="image-props-autoinstall-script" rows="20" style="font-family: monospace; width: 100%; padding: 8px; border: 1px solid var(--text-muted); border-radius: 4px; background: var(--bg-secondary); color: var(--text-primary);" placeholder="Enter your auto-install script content here..."></textarea>
-                    <small style="color: var(--text-secondary);">
-                        Script will be served at: http://server:port/autoinstall/<span id="image-props-autoinstall-url"></span>
+                    <small style="color: var(--text-secondary); display: block; margin-top: 4px;">
+                        Served at: http://server:port/autoinstall/<span id="image-props-autoinstall-url"></span>
+                    </small>
+                    <small style="color: var(--text-secondary); display: block; margin-top: 4px;">
+                        Placeholders (replaced per-client at serve time):
+                        <code>{{MAC}}</code>
+                        <code>{{HOSTNAME}}</code>
+                        <code>{{CLIENT_NAME}}</code>
+                        <code>{{IP}}</code>
+                        <code>{{SERVER_ADDR}}</code>
+                        <code>{{IMAGE_NAME}}</code>
+                        <code>{{IMAGE_FILENAME}}</code>
                     </small>
                 </div>
             </div>
@@ -1529,9 +1746,14 @@
                 </div>
             </div>
 
-            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border);">
-                <button class="btn btn-primary" onclick="saveImageProperties()">Save Properties</button>
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border); display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                <button id="image-props-extract-btn" class="btn btn-success" style="display: none;" onclick="extractFromProperties()">Extract</button>
+                <button id="image-props-netboot-btn" class="btn btn-warning" style="display: none;" onclick="downloadNetbootFromProperties()">⬇ Netboot</button>
+                <button id="image-props-download-btn" class="btn" onclick="downloadISOFromProperties()">⬇ Download ISO</button>
+                <button id="image-props-delete-btn" class="btn btn-danger" onclick="deleteFromProperties()">Delete</button>
+                <div style="flex: 1;"></div>
                 <button class="btn" onclick="closeModal('image-properties-modal')">Cancel</button>
+                <button class="btn btn-primary" onclick="saveImageProperties()">Save Properties</button>
             </div>
         </div>
     </div>
@@ -1571,7 +1793,7 @@
         </div>
     </div>
 
-    <div id="edit-group-modal" class="modal">
+    <div id="edit-group-modal" class="modal slide-panel">
         <div class="modal-content">
             <div class="modal-header">
                 <h2>Edit Group</h2>
@@ -1600,8 +1822,215 @@
                     <input type="checkbox" name="enabled">
                     <label>Enabled</label>
                 </div>
-                <button type="submit" class="btn btn-primary">Update Group</button>
-                <button type="button" class="btn" onclick="closeModal('edit-group-modal')">Cancel</button>
+                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border); display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                    <button type="button" class="btn btn-danger" onclick="deleteFromEditGroup()">Delete</button>
+                    <div style="flex: 1;"></div>
+                    <button type="button" class="btn" onclick="closeModal('edit-group-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Update Group</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Import Clients CSV Modal -->
+    <div id="import-clients-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header"><h2>Import Clients from CSV</h2></div>
+            <p style="color: var(--text-secondary); font-size: 13px; margin: 0 0 12px 0;">
+                CSV columns: <code>mac_address</code> (required), <code>name</code>, <code>description</code>,
+                <code>enabled</code>, <code>show_public_images</code>, <code>static</code>,
+                <code>bootloader_set</code>, <code>client_group</code>, <code>allowed_images</code>
+                (pipe-separated), <code>next_boot_image</code>. A header row is expected.
+                Existing clients (matched by MAC) are updated; unknown MACs are created.
+            </p>
+            <form id="import-clients-form" onsubmit="event.preventDefault(); importClientsCSV();">
+                <div class="form-group">
+                    <label>CSV File</label>
+                    <input type="file" id="import-clients-file" accept=".csv,text/csv" required>
+                </div>
+                <div id="import-clients-result" style="display: none; margin-bottom: 12px; padding: 10px; border-radius: var(--radius-sm); background: var(--bg-tertiary); font-size: 13px;"></div>
+                <button type="submit" class="btn btn-primary">Import</button>
+                <button type="button" class="btn" onclick="closeModal('import-clients-modal')">Cancel</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Client Group Modal -->
+    <div id="add-client-group-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header"><h2>Add Client Group</h2></div>
+            <form id="add-client-group-form">
+                <div class="form-group">
+                    <label>Name *</label>
+                    <input type="text" name="name" required placeholder="e.g. lab1-workstations">
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea name="description" rows="2"></textarea>
+                </div>
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" name="enabled" checked>
+                    <label>Enabled</label>
+                </div>
+                <button type="submit" class="btn btn-primary">Create Group</button>
+                <button type="button" class="btn" onclick="closeModal('add-client-group-modal')">Cancel</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Client Group Modal (slide-in) -->
+    <div id="edit-client-group-modal" class="modal slide-panel">
+        <div class="modal-content" style="max-width: 640px;">
+            <div class="modal-header">
+                <h2>Client Group: <span id="cg-props-name"></span></h2>
+            </div>
+            <form id="edit-client-group-form">
+                <input type="hidden" name="id">
+                <div class="form-group">
+                    <label>Name *</label>
+                    <input type="text" name="name" required>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea name="description" rows="2"></textarea>
+                </div>
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" name="enabled">
+                    <label>Enabled</label>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label>WOL Broadcast Override</label>
+                        <input type="text" name="wol_broadcast_addr" placeholder="e.g. 192.168.1.255">
+                        <small style="color: var(--text-muted);">Blank = use server default.</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Stagger Delay (ms)</label>
+                        <input type="number" name="stagger_delay_millis" min="0" value="0">
+                        <small style="color: var(--text-muted);">Delay between each WOL/next-boot action to avoid broadcast storms.</small>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Bootloader Set Override</label>
+                    <select name="bootloader_set" id="cg-bootloader-select">
+                        <option value="">Default (global setting)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Overlay Allowed Images</label>
+                    <select name="allowed_images" id="cg-allowed-images" multiple size="8"></select>
+                    <small style="color: var(--text-secondary);">Members inherit these on top of their own allowlist.</small>
+                </div>
+                <div class="form-group">
+                    <label>Members</label>
+                    <select id="cg-members" multiple size="8"></select>
+                    <small style="color: var(--text-secondary);">Hold Ctrl/Cmd to select multiple. Clients can belong to only one group.</small>
+                </div>
+
+                <details style="margin-bottom: 12px;">
+                    <summary style="cursor: pointer; font-weight: 500; padding: 6px 0;">BMC / Redfish Defaults</summary>
+                    <p style="color: var(--text-muted); font-size: 12px; margin: 4px 0 10px 0;">
+                        Shared credentials for group members. Individual clients can override. Host is per-client only.
+                    </p>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div class="form-group">
+                            <label>Port</label>
+                            <input type="number" name="ipmi_port" min="1" max="65535" placeholder="443">
+                        </div>
+                        <div class="form-group checkbox-group" style="align-self: end; padding: 6px 0;">
+                            <input type="checkbox" name="ipmi_insecure" id="cg-ipmi-insecure">
+                            <label for="cg-ipmi-insecure">Skip TLS verify</label>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div class="form-group">
+                            <label>Username</label>
+                            <input type="text" name="ipmi_username" autocomplete="off">
+                        </div>
+                        <div class="form-group">
+                            <label>Password</label>
+                            <input type="password" name="ipmi_password" autocomplete="off">
+                        </div>
+                    </div>
+                </details>
+
+                <!-- Bulk actions panel -->
+                <div style="background: var(--bg-tertiary); padding: 16px; border-radius: var(--radius-sm); margin-bottom: 15px;">
+                    <h3 style="margin: 0 0 10px 0; font-size: 15px; color: var(--accent);">Bulk Actions</h3>
+                    <p style="color: var(--text-secondary); font-size: 12px; margin: 0 0 12px 0;">
+                        Run against all enabled members. Save any pending changes to membership first.
+                    </p>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px;">
+                        <button type="button" class="btn btn-success btn-sm" onclick="bulkWakeClientGroup()">Wake All (WOL)</button>
+                        <button type="button" class="btn btn-primary btn-sm" onclick="bulkClearNextBootClientGroup()">Clear Next Boot on All</button>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 10px;">
+                        <select id="cg-bulk-nextboot-image" style="flex: 1;"></select>
+                        <button type="button" class="btn btn-primary btn-sm" onclick="bulkSetNextBootClientGroup()">Set Next Boot on All</button>
+                    </div>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--border);">
+                        <span style="font-size: 12px; color: var(--text-secondary); align-self: center;">BMC:</span>
+                        <button type="button" class="btn btn-success btn-sm" onclick="bulkPowerClientGroup('On')">Power On All</button>
+                        <button type="button" class="btn btn-danger btn-sm" onclick="bulkPowerClientGroup('ForceOff')">Force Off All</button>
+                        <button type="button" class="btn btn-sm" onclick="bulkPowerClientGroup('ForceRestart')">Restart All</button>
+                    </div>
+                </div>
+
+                <div style="background: var(--bg-tertiary); padding: 16px; border-radius: var(--radius-sm); margin-bottom: 15px;">
+                    <h3 style="margin: 0 0 8px 0; font-size: 15px; color: var(--accent);">Scheduled Tasks</h3>
+                    <p style="color: var(--text-secondary); font-size: 12px; margin: 0 0 10px 0;">
+                        Recurring bulk actions against this group. All times are server-local.
+                    </p>
+                    <div id="cg-schedules-list" style="margin-bottom: 10px; font-size: 13px;"></div>
+                    <details>
+                        <summary style="cursor: pointer; font-size: 13px; color: var(--accent);">+ Add schedule</summary>
+                        <div style="margin-top: 10px;">
+                            <div class="form-group">
+                                <label>Name</label>
+                                <input type="text" id="cg-sched-name" placeholder="e.g. weekday-morning-wake">
+                            </div>
+                            <div class="form-group">
+                                <label>Preset</label>
+                                <select id="cg-sched-preset" onchange="applySchedulePreset()">
+                                    <option value="">(custom)</option>
+                                    <option value="0 8 * * 1-5">Weekdays at 08:00</option>
+                                    <option value="0 18 * * 1-5">Weekdays at 18:00</option>
+                                    <option value="0 * * * *">Every hour</option>
+                                    <option value="*/15 * * * *">Every 15 minutes</option>
+                                    <option value="0 3 * * *">Daily at 03:00</option>
+                                    <option value="0 0 * * 0">Weekly, Sunday midnight</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Cron Expression</label>
+                                <input type="text" id="cg-sched-cron" placeholder="0 8 * * 1-5">
+                                <small style="color: var(--text-muted);"><code>min hour dom mon dow</code> — 5 fields</small>
+                            </div>
+                            <div class="form-group">
+                                <label>Action</label>
+                                <select id="cg-sched-action" onchange="updateScheduleActionHint()">
+                                    <option value="wake">Wake All (WOL)</option>
+                                    <option value="power">Power (Redfish)</option>
+                                    <option value="next-boot">Set Next Boot Image</option>
+                                    <option value="next-boot-clear">Clear Next Boot</option>
+                                </select>
+                            </div>
+                            <div class="form-group" id="cg-sched-param-wrap">
+                                <label id="cg-sched-param-label">Parameter</label>
+                                <input type="text" id="cg-sched-param" placeholder="">
+                                <small id="cg-sched-param-hint" style="color: var(--text-muted);"></small>
+                            </div>
+                            <button type="button" class="btn btn-primary btn-sm" onclick="saveNewSchedule()">Create Schedule</button>
+                        </div>
+                    </details>
+                </div>
+
+                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border); display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                    <button type="button" class="btn btn-danger" onclick="deleteFromEditClientGroup()">Delete</button>
+                    <div style="flex: 1;"></div>
+                    <button type="button" class="btn" onclick="closeModal('edit-client-group-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Group</button>
+                </div>
             </form>
         </div>
     </div>

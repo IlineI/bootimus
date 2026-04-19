@@ -78,6 +78,79 @@ type Client struct {
 	AllowedImages    StringSlice    `gorm:"type:text" json:"allowed_images,omitempty"`
 	NextBootImage    string         `json:"next_boot_image,omitempty"`
 	Static           bool           `gorm:"default:false" json:"static"`
+	ClientGroupID    *uint          `gorm:"index" json:"client_group_id,omitempty"`
+	ClientGroup      *ClientGroup   `gorm:"foreignKey:ClientGroupID" json:"client_group,omitempty"`
+
+	// Redfish (BMC) power control. Empty fields = inherit from the client
+	// group, if any. ipmi_host is the BMC/iLO/iDRAC/XCC address — separate
+	// from the client's main interface because BMCs have their own NIC.
+	IPMIHost     string `json:"ipmi_host,omitempty"`
+	IPMIPort     int    `json:"ipmi_port,omitempty"`
+	IPMIUsername string `json:"ipmi_username,omitempty"`
+	IPMIPassword string `json:"ipmi_password,omitempty"`
+	IPMIInsecure bool   `gorm:"default:false" json:"ipmi_insecure,omitempty"`
+}
+
+// ScheduledTask is a recurring action bootimus runs on a cron schedule
+// against a client group. Action types: "wake" (WOL all members),
+// "power" (Redfish against all members, ActionParam=On/ForceOff/etc),
+// "next-boot" (set next-boot image on all members, ActionParam=filename),
+// "next-boot-clear" (clear next-boot on all members).
+type ScheduledTask struct {
+	ID             uint           `gorm:"primarykey" json:"id"`
+	CreatedAt      time.Time      `json:"created_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
+	DeletedAt      gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty"`
+	Name           string         `gorm:"not null" json:"name"`
+	Enabled        bool           `gorm:"default:true" json:"enabled"`
+	CronExpr       string         `gorm:"not null" json:"cron_expr"`
+	ClientGroupID  uint           `gorm:"not null;index" json:"client_group_id"`
+	ClientGroup    *ClientGroup   `gorm:"foreignKey:ClientGroupID" json:"client_group,omitempty"`
+	ActionType     string         `gorm:"not null" json:"action_type"`
+	ActionParam    string         `json:"action_param,omitempty"`
+	LastRun        *time.Time     `json:"last_run,omitempty"`
+	LastStatus     string         `json:"last_status,omitempty"`
+	LastError      string         `json:"last_error,omitempty"`
+	RunCount       int            `gorm:"default:0" json:"run_count"`
+}
+
+// WebhookConfig is a singleton (ID=1) holding the outbound webhook URL and
+// per-event toggles. Fire-and-forget HTTP POSTs with a JSON payload.
+type WebhookConfig struct {
+	ID                    uint      `gorm:"primarykey" json:"id"`
+	UpdatedAt             time.Time `json:"updated_at"`
+	URL                   string    `json:"url"`
+	Enabled               bool      `gorm:"default:false" json:"enabled"`
+	OnBootStarted         bool      `gorm:"default:true" json:"on_boot_started"`
+	OnClientDiscovered    bool      `gorm:"default:true" json:"on_client_discovered"`
+	OnInventoryUpdated    bool      `gorm:"default:false" json:"on_inventory_updated"`
+}
+
+// ClientGroup represents a set of clients that share common settings and can
+// be targeted by bulk actions (wake all, set next-boot on all members, etc.).
+// Group-level AllowedImages are unioned with each member's client-level
+// AllowedImages when resolving what that client can boot.
+type ClientGroup struct {
+	ID                 uint           `gorm:"primarykey" json:"id"`
+	CreatedAt          time.Time      `json:"created_at"`
+	UpdatedAt          time.Time      `json:"updated_at"`
+	DeletedAt          gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty"`
+	Name               string         `gorm:"uniqueIndex;not null" json:"name"`
+	Description        string         `json:"description"`
+	Enabled            bool           `gorm:"default:true" json:"enabled"`
+	AllowedImages      StringSlice    `gorm:"type:text" json:"allowed_images,omitempty"`
+	BootloaderSet      string         `json:"bootloader_set,omitempty"`
+	WOLBroadcastAddr   string         `json:"wol_broadcast_addr,omitempty"`
+	StaggerDelayMillis int            `gorm:"default:0" json:"stagger_delay_millis"`
+	Clients            []Client       `gorm:"foreignKey:ClientGroupID" json:"clients,omitempty"`
+
+	// Redfish (BMC) defaults inherited by member clients unless overridden.
+	// IPMIHost is almost always per-client (each BMC has its own IP) so it's
+	// not group-level; the group only carries shared credentials + port.
+	IPMIPort     int    `json:"ipmi_port,omitempty"`
+	IPMIUsername string `json:"ipmi_username,omitempty"`
+	IPMIPassword string `json:"ipmi_password,omitempty"`
+	IPMIInsecure bool   `gorm:"default:false" json:"ipmi_insecure,omitempty"`
 }
 
 type SyncFile struct {

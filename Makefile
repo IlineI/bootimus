@@ -1,4 +1,4 @@
-.PHONY: help build run clean docker-build docker-up docker-down docker-push release binaries bootloaders sync-profiles
+.PHONY: help build run clean docker-build docker-up docker-down docker-push release binaries bootloaders sync-profiles appliance
 
 VERSION    ?= $(shell cat VERSION)
 DOCKER_USER ?= garybowers
@@ -24,6 +24,9 @@ help:
 	@echo "Bootloaders:"
 	@echo "  make bootloaders      - Build iPXE and download Secure Boot binaries"
 	@echo ""
+	@echo "Appliance:"
+	@echo "  make appliance        - Build bootable USB appliance image (.img)"
+	@echo ""
 	@echo "Publish:"
 	@echo "  make binaries         - Build multi-arch binaries via docker buildx"
 	@echo "  make release          - Build binaries and show upload instructions"
@@ -34,6 +37,10 @@ help:
 bootloaders:
 	@echo "Building iPXE bootloaders and downloading Secure Boot binaries..."
 	./scripts/build-bootloaders.sh
+
+appliance:
+	@echo "Building Bootimus USB appliance image..."
+	./appliance/build.sh
 
 ## Local (binary) -------------------------------------------------------------
 

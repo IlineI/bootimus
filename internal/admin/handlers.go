@@ -1,6 +1,11 @@
 package admin
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
+	"context"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -19,6 +24,7 @@ import (
 	"bootimus/internal/extractor"
 	"bootimus/internal/models"
 	"bootimus/internal/profiles"
+	"bootimus/internal/redfish"
 	"bootimus/internal/storage"
 	"bootimus/internal/sysstats"
 	"bootimus/internal/tools"
@@ -43,9 +49,15 @@ type Handler struct {
 	wolBroadcastAddr   string
 	profileManager     *profiles.Manager
 	proxyDHCPEnabled   bool
+	httpPort           int
+	// SchedulerReload is called after any CRUD change on ScheduledTask so
+	// the cron daemon picks up the new state without a server restart.
+	SchedulerReload func() error
+	// SchedulerRunNow fires a task immediately via the scheduler.
+	SchedulerRunNow func(id uint) error
 }
 
-func NewHandler(store storage.Storage, dataDir string, isoDir string, bootDir string, version string, blSelector BootloaderSelector, tm *tools.Manager, wolBroadcastAddr string, pm *profiles.Manager, proxyDHCPEnabled bool) *Handler {
+func NewHandler(store storage.Storage, dataDir string, isoDir string, bootDir string, version string, blSelector BootloaderSelector, tm *tools.Manager, wolBroadcastAddr string, pm *profiles.Manager, proxyDHCPEnabled bool, httpPort int) *Handler {
 	return &Handler{
 		storage:            store,
 		dataDir:            dataDir,
@@ -57,6 +69,7 @@ func NewHandler(store storage.Storage, dataDir string, isoDir string, bootDir st
 		profileManager:     pm,
 		wolBroadcastAddr:   wolBroadcastAddr,
 		proxyDHCPEnabled:   proxyDHCPEnabled,
+		httpPort:           httpPort,
 	}
 }
 
@@ -1264,13 +1277,21 @@ func (h *Handler) GetBootLogs(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	logs, err := h.storage.GetBootLogs(limit)
+	var (
+		logs []models.BootLog
+		err  error
+	)
+	if mac := r.URL.Query().Get("mac"); mac != "" {
+		mac = strings.ToLower(strings.ReplaceAll(mac, "-", ":"))
+		logs, err = h.storage.GetBootLogsByMAC(mac, limit)
+	} else {
+		logs, err = h.storage.GetBootLogs(limit)
+	}
 	if err != nil {
 		h.sendJSON(w, http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
 		return
 	}
 
-	log.Printf("Boot logs retrieved: %d entries", len(logs))
 	h.sendJSON(w, http.StatusOK, Response{Success: true, Data: logs})
 }
 
@@ -1971,6 +1992,7 @@ func (h *Handler) GetServerInfo(w http.ResponseWriter, r *http.Request) {
 				}
 				return "Disabled (external DHCP must set next-server/bootfile)"
 			}(),
+			"http_port": fmt.Sprintf("%d", h.httpPort),
 		},
 		"environment": map[string]string{
 			"BOOTIMUS_TFTP_PORT":        os.Getenv("BOOTIMUS_TFTP_PORT"),
@@ -3137,6 +3159,838 @@ func (h *Handler) DeleteImageGroup(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Deleted image group: %s (ID: %d)", group.Name, group.ID)
 	h.sendJSON(w, http.StatusOK, Response{Success: true, Message: "Group deleted"})
+}
+
+// resolveRedfish merges per-client settings with the client's group defaults.
+// Returns (client_host, port, username, password, insecure, ok).
+// ok=false when we can't assemble a complete config (no host + no creds).
+func (h *Handler) resolveRedfish(c *models.Client) (string, int, string, string, bool, bool) {
+	host := c.IPMIHost
+	port := c.IPMIPort
+	user := c.IPMIUsername
+	pass := c.IPMIPassword
+	insecure := c.IPMIInsecure
+
+	if c.ClientGroupID != nil {
+		if g, err := h.storage.GetClientGroup(*c.ClientGroupID); err == nil && g != nil {
+			if port == 0 {
+				port = g.IPMIPort
+			}
+			if user == "" {
+				user = g.IPMIUsername
+			}
+			if pass == "" {
+				pass = g.IPMIPassword
+			}
+			if !insecure {
+				insecure = g.IPMIInsecure
+			}
+		}
+	}
+
+	if host == "" || user == "" || pass == "" {
+		return "", 0, "", "", false, false
+	}
+	return host, port, user, pass, insecure, true
+}
+
+// PowerClient issues a Redfish power action against a single client's BMC.
+func (h *Handler) PowerClient(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.sendJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Error: "Method not allowed"})
+		return
+	}
+	mac := strings.ToLower(strings.ReplaceAll(r.URL.Query().Get("mac"), "-", ":"))
+	action := r.URL.Query().Get("action")
+	if mac == "" || action == "" {
+		h.sendJSON(w, http.StatusBadRequest, Response{Success: false, Error: "mac and action are required"})
+		return
+	}
+	c, err := h.storage.GetClient(mac)
+	if err != nil {
+		h.sendJSON(w, http.StatusNotFound, Response{Success: false, Error: "Client not found"})
+		return
+	}
+	host, port, user, pass, insecure, ok := h.resolveRedfish(c)
+	if !ok {
+		h.sendJSON(w, http.StatusBadRequest, Response{Success: false, Error: "Client has no BMC host + credentials (set on client or group)"})
+		return
+	}
+	client := redfish.New(host, port, user, pass, insecure)
+	if err := client.SetPower(r.Context(), redfish.PowerAction(action)); err != nil {
+		log.Printf("Redfish %s on %s (%s) failed: %v", action, mac, host, err)
+		h.sendJSON(w, http.StatusOK, Response{Success: false, Error: err.Error()})
+		return
+	}
+	log.Printf("Redfish %s on %s (%s) succeeded", action, mac, host)
+	h.sendJSON(w, http.StatusOK, Response{Success: true, Message: fmt.Sprintf("Power %s sent to %s", action, mac)})
+}
+
+// PowerStatusClient queries current power state via Redfish.
+func (h *Handler) PowerStatusClient(w http.ResponseWriter, r *http.Request) {
+	mac := strings.ToLower(strings.ReplaceAll(r.URL.Query().Get("mac"), "-", ":"))
+	if mac == "" {
+		h.sendJSON(w, http.StatusBadRequest, Response{Success: false, Error: "mac required"})
+		return
+	}
+	c, err := h.storage.GetClient(mac)
+	if err != nil {
+		h.sendJSON(w, http.StatusNotFound, Response{Success: false, Error: "Client not found"})
+		return
+	}
+	host, port, user, pass, insecure, ok := h.resolveRedfish(c)
+	if !ok {
+		h.sendJSON(w, http.StatusOK, Response{Success: true, Data: map[string]string{"state": "unconfigured"}})
+		return
+	}
+	client := redfish.New(host, port, user, pass, insecure)
+	state, err := client.PowerState(r.Context())
+	if err != nil {
+		h.sendJSON(w, http.StatusOK, Response{Success: false, Error: err.Error()})
+		return
+	}
+	h.sendJSON(w, http.StatusOK, Response{Success: true, Data: map[string]string{"state": state}})
+}
+
+// PowerClientGroup issues a Redfish action against every member with a
+// resolvable BMC config. Honours the group's stagger delay.
+func (h *Handler) PowerClientGroup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.sendJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Error: "Method not allowed"})
+		return
+	}
+	id, err := strconv.ParseUint(r.URL.Query().Get("id"), 10, 32)
+	if err != nil {
+		h.sendJSON(w, http.StatusBadRequest, Response{Success: false, Error: "Invalid group ID"})
+		return
+	}
+	action := r.URL.Query().Get("action")
+	if action == "" {
+		h.sendJSON(w, http.StatusBadRequest, Response{Success: false, Error: "action required"})
+		return
+	}
+	group, err := h.storage.GetClientGroup(uint(id))
+	if err != nil {
+		h.sendJSON(w, http.StatusNotFound, Response{Success: false, Error: "Group not found"})
+		return
+	}
+	members, err := h.storage.ListClientsInGroup(uint(id))
+	if err != nil {
+		h.sendJSON(w, http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+	stagger := time.Duration(group.StaggerDelayMillis) * time.Millisecond
+	dispatched := 0
+	for _, c := range members {
+		if !c.Enabled {
+			continue
+		}
+		host, port, user, pass, insecure, ok := h.resolveRedfish(c)
+		if !ok {
+			continue
+		}
+		dispatched++
+		go func(mac, host string, port int, user, pass string, insecure bool) {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			client := redfish.New(host, port, user, pass, insecure)
+			if err := client.SetPower(ctx, redfish.PowerAction(action)); err != nil {
+				log.Printf("Redfish bulk %s on %s (%s) failed: %v", action, mac, host, err)
+			} else {
+				log.Printf("Redfish bulk %s on %s (%s) ok", action, mac, host)
+			}
+		}(c.MACAddress, host, port, user, pass, insecure)
+		if stagger > 0 {
+			time.Sleep(stagger)
+		}
+	}
+	h.sendJSON(w, http.StatusOK, Response{
+		Success: true,
+		Message: fmt.Sprintf("Power %s dispatched to %d member(s) of %s", action, dispatched, group.Name),
+	})
+}
+
+// ---- Scheduled tasks ----
+
+func (h *Handler) ListScheduledTasks(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.sendJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Error: "Method not allowed"})
+		return
+	}
+	var tasks []*models.ScheduledTask
+	var err error
+	if gid := r.URL.Query().Get("group_id"); gid != "" {
+		id, perr := strconv.ParseUint(gid, 10, 32)
+		if perr != nil {
+			h.sendJSON(w, http.StatusBadRequest, Response{Success: false, Error: "Invalid group_id"})
+			return
+		}
+		tasks, err = h.storage.ListScheduledTasksByGroup(uint(id))
+	} else {
+		tasks, err = h.storage.ListScheduledTasks()
+	}
+	if err != nil {
+		h.sendJSON(w, http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+	h.sendJSON(w, http.StatusOK, Response{Success: true, Data: tasks})
+}
+
+func (h *Handler) CreateScheduledTask(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.sendJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Error: "Method not allowed"})
+		return
+	}
+	var t models.ScheduledTask
+	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
+		h.sendJSON(w, http.StatusBadRequest, Response{Success: false, Error: "Invalid body"})
+		return
+	}
+	if t.Name == "" || t.CronExpr == "" || t.ActionType == "" || t.ClientGroupID == 0 {
+		h.sendJSON(w, http.StatusBadRequest, Response{Success: false, Error: "name, cron_expr, action_type, client_group_id are required"})
+		return
+	}
+	if err := h.storage.CreateScheduledTask(&t); err != nil {
+		h.sendJSON(w, http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+	if h.SchedulerReload != nil {
+		h.SchedulerReload()
+	}
+	log.Printf("Scheduled task created: %s (id=%d)", t.Name, t.ID)
+	h.sendJSON(w, http.StatusOK, Response{Success: true, Data: t})
+}
+
+func (h *Handler) UpdateScheduledTask(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		h.sendJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Error: "Method not allowed"})
+		return
+	}
+	id, err := strconv.ParseUint(r.URL.Query().Get("id"), 10, 32)
+	if err != nil {
+		h.sendJSON(w, http.StatusBadRequest, Response{Success: false, Error: "Invalid id"})
+		return
+	}
+	var t models.ScheduledTask
+	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
+		h.sendJSON(w, http.StatusBadRequest, Response{Success: false, Error: "Invalid body"})
+		return
+	}
+	t.ID = uint(id)
+	if err := h.storage.UpdateScheduledTask(uint(id), &t); err != nil {
+		h.sendJSON(w, http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+	if h.SchedulerReload != nil {
+		h.SchedulerReload()
+	}
+	h.sendJSON(w, http.StatusOK, Response{Success: true, Data: t})
+}
+
+func (h *Handler) DeleteScheduledTask(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		h.sendJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Error: "Method not allowed"})
+		return
+	}
+	id, err := strconv.ParseUint(r.URL.Query().Get("id"), 10, 32)
+	if err != nil {
+		h.sendJSON(w, http.StatusBadRequest, Response{Success: false, Error: "Invalid id"})
+		return
+	}
+	if err := h.storage.DeleteScheduledTask(uint(id)); err != nil {
+		h.sendJSON(w, http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+	if h.SchedulerReload != nil {
+		h.SchedulerReload()
+	}
+	h.sendJSON(w, http.StatusOK, Response{Success: true, Message: "Scheduled task deleted"})
+}
+
+func (h *Handler) RunScheduledTask(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.sendJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Error: "Method not allowed"})
+		return
+	}
+	id, err := strconv.ParseUint(r.URL.Query().Get("id"), 10, 32)
+	if err != nil {
+		h.sendJSON(w, http.StatusBadRequest, Response{Success: false, Error: "Invalid id"})
+		return
+	}
+	if h.SchedulerRunNow == nil {
+		h.sendJSON(w, http.StatusInternalServerError, Response{Success: false, Error: "Scheduler not wired"})
+		return
+	}
+	if err := h.SchedulerRunNow(uint(id)); err != nil {
+		h.sendJSON(w, http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+	h.sendJSON(w, http.StatusOK, Response{Success: true, Message: "Task dispatched"})
+}
+
+// GetWebhookConfig returns the singleton webhook configuration.
+func (h *Handler) GetWebhookConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.sendJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Error: "Method not allowed"})
+		return
+	}
+	cfg, err := h.storage.GetWebhookConfig()
+	if err != nil {
+		h.sendJSON(w, http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+	h.sendJSON(w, http.StatusOK, Response{Success: true, Data: cfg})
+}
+
+// UpdateWebhookConfig persists the webhook URL and event toggles.
+func (h *Handler) UpdateWebhookConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut && r.Method != http.MethodPost {
+		h.sendJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Error: "Method not allowed"})
+		return
+	}
+	var cfg models.WebhookConfig
+	if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
+		h.sendJSON(w, http.StatusBadRequest, Response{Success: false, Error: "Invalid body"})
+		return
+	}
+	if err := h.storage.UpdateWebhookConfig(&cfg); err != nil {
+		h.sendJSON(w, http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+	h.sendJSON(w, http.StatusOK, Response{Success: true, Message: "Webhook config saved", Data: cfg})
+}
+
+// TestWebhook fires a synthetic event to the configured URL so the user can
+// verify connectivity. Returns the downstream HTTP status or the transport
+// error; does not require Enabled=true since this is the "does it work at
+// all" button.
+func (h *Handler) TestWebhook(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.sendJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Error: "Method not allowed"})
+		return
+	}
+	cfg, err := h.storage.GetWebhookConfig()
+	if err != nil || cfg == nil || cfg.URL == "" {
+		h.sendJSON(w, http.StatusBadRequest, Response{Success: false, Error: "No webhook URL configured"})
+		return
+	}
+	body, _ := json.Marshal(map[string]interface{}{
+		"event":     "test",
+		"timestamp": time.Now().UTC(),
+		"message":   "Bootimus webhook test",
+	})
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, "POST", cfg.URL, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "bootimus-webhook/1 (test)")
+	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
+	if err != nil {
+		h.sendJSON(w, http.StatusOK, Response{Success: false, Error: err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+	h.sendJSON(w, http.StatusOK, Response{
+		Success: resp.StatusCode < 300,
+		Message: fmt.Sprintf("Downstream HTTP %d", resp.StatusCode),
+	})
+}
+
+// ExportBackup streams a tar.gz of the bootimus data directory, excluding
+// the large mostly-reproducible payloads (ISOs, downloaded tool binaries).
+// What's included: SQLite DB, bootloader-config.json, custom bootloader sets,
+// and any other top-level config/state files.
+//
+// Restore is manual for now: stop bootimus, extract the tarball over the
+// data directory, start bootimus. A live restore would need to close the
+// DB atomically and we want to avoid that complexity on this pass.
+func (h *Handler) ExportBackup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.sendJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Error: "Method not allowed"})
+		return
+	}
+	dataDir := filepath.Clean(h.dataDir)
+	if dataDir == "" {
+		h.sendJSON(w, http.StatusInternalServerError, Response{Success: false, Error: "Data directory not configured"})
+		return
+	}
+
+	ts := time.Now().UTC().Format("20060102-150405")
+	w.Header().Set("Content-Type", "application/gzip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="bootimus-backup-%s.tar.gz"`, ts))
+
+	gz := gzip.NewWriter(w)
+	defer gz.Close()
+	tw := tar.NewWriter(gz)
+	defer tw.Close()
+
+	// Top-level directories we deliberately skip — reproducible and potentially huge.
+	skipDirs := map[string]bool{
+		"isos":  true,
+		"tools": true,
+	}
+
+	err := filepath.Walk(dataDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, relErr := filepath.Rel(dataDir, path)
+		if relErr != nil {
+			return relErr
+		}
+		if rel == "." {
+			return nil
+		}
+		// Skip excluded top-level dirs (and everything beneath them).
+		topLevel := rel
+		if i := strings.Index(topLevel, string(os.PathSeparator)); i >= 0 {
+			topLevel = topLevel[:i]
+		}
+		if skipDirs[topLevel] {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		hdr, hdrErr := tar.FileInfoHeader(info, "")
+		if hdrErr != nil {
+			return hdrErr
+		}
+		hdr.Name = filepath.ToSlash(rel)
+		if err := tw.WriteHeader(hdr); err != nil {
+			return err
+		}
+		if info.IsDir() || !info.Mode().IsRegular() {
+			return nil
+		}
+		f, openErr := os.Open(path)
+		if openErr != nil {
+			return openErr
+		}
+		defer f.Close()
+		_, copyErr := io.Copy(tw, f)
+		return copyErr
+	})
+	if err != nil {
+		log.Printf("Backup export failed mid-stream: %v", err)
+		// At this point we've already sent headers; nothing graceful to do.
+		return
+	}
+	log.Printf("Backup exported (%s)", ts)
+}
+
+// ImportClientsCSV accepts a multipart CSV upload and creates or updates
+// clients. MAC is the primary key; unknown MACs create new records.
+func (h *Handler) ImportClientsCSV(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.sendJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Error: "Method not allowed"})
+		return
+	}
+	if err := r.ParseMultipartForm(8 << 20); err != nil {
+		h.sendJSON(w, http.StatusBadRequest, Response{Success: false, Error: "Upload too large or malformed"})
+		return
+	}
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		h.sendJSON(w, http.StatusBadRequest, Response{Success: false, Error: "file field missing"})
+		return
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	reader.TrimLeadingSpace = true
+	header, err := reader.Read()
+	if err != nil {
+		h.sendJSON(w, http.StatusBadRequest, Response{Success: false, Error: "CSV header row missing"})
+		return
+	}
+	idx := make(map[string]int, len(header))
+	for i, name := range header {
+		idx[strings.ToLower(strings.TrimSpace(name))] = i
+	}
+	if _, ok := idx["mac_address"]; !ok {
+		h.sendJSON(w, http.StatusBadRequest, Response{Success: false, Error: "CSV must include a mac_address column"})
+		return
+	}
+
+	groupsByName := map[string]uint{}
+	if groups, err := h.storage.ListClientGroups(); err == nil {
+		for _, g := range groups {
+			groupsByName[strings.ToLower(g.Name)] = g.ID
+		}
+	}
+
+	get := func(row []string, key string) string {
+		if i, ok := idx[key]; ok && i < len(row) {
+			return strings.TrimSpace(row[i])
+		}
+		return ""
+	}
+	toBool := func(s string) bool {
+		switch strings.ToLower(s) {
+		case "1", "true", "yes", "y", "on":
+			return true
+		}
+		return false
+	}
+
+	var created, updated, skipped int
+	var errors []string
+
+	for rowNum := 2; ; rowNum++ {
+		row, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("row %d: %v", rowNum, err))
+			continue
+		}
+		mac := strings.ToLower(strings.ReplaceAll(get(row, "mac_address"), "-", ":"))
+		if mac == "" {
+			skipped++
+			continue
+		}
+
+		client := &models.Client{
+			MACAddress:       mac,
+			Name:             get(row, "name"),
+			Description:      get(row, "description"),
+			BootloaderSet:    get(row, "bootloader_set"),
+			NextBootImage:    get(row, "next_boot_image"),
+			Enabled:          true,
+			ShowPublicImages: true,
+		}
+		if v := get(row, "enabled"); v != "" {
+			client.Enabled = toBool(v)
+		}
+		if v := get(row, "show_public_images"); v != "" {
+			client.ShowPublicImages = toBool(v)
+		}
+		if v := get(row, "static"); v != "" {
+			client.Static = toBool(v)
+		}
+		if allowed := get(row, "allowed_images"); allowed != "" {
+			var list []string
+			for _, f := range strings.Split(allowed, "|") {
+				f = strings.TrimSpace(f)
+				if f != "" {
+					list = append(list, f)
+				}
+			}
+			client.AllowedImages = list
+		}
+		if groupName := get(row, "client_group"); groupName != "" {
+			if id, ok := groupsByName[strings.ToLower(groupName)]; ok {
+				idCopy := id
+				client.ClientGroupID = &idCopy
+			}
+		}
+
+		if _, err := h.storage.GetClient(mac); err == nil {
+			if err := h.storage.UpdateClient(mac, client); err != nil {
+				errors = append(errors, fmt.Sprintf("row %d (%s): update failed: %v", rowNum, mac, err))
+				continue
+			}
+			updated++
+		} else {
+			if err := h.storage.CreateClient(client); err != nil {
+				errors = append(errors, fmt.Sprintf("row %d (%s): create failed: %v", rowNum, mac, err))
+				continue
+			}
+			created++
+		}
+	}
+
+	log.Printf("Clients CSV import: %d created, %d updated, %d skipped, %d errors", created, updated, skipped, len(errors))
+	h.sendJSON(w, http.StatusOK, Response{
+		Success: true,
+		Data: map[string]interface{}{
+			"created": created,
+			"updated": updated,
+			"skipped": skipped,
+			"errors":  errors,
+		},
+	})
+}
+
+// ---- Client groups ----
+
+func (h *Handler) ListClientGroups(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.sendJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Error: "Method not allowed"})
+		return
+	}
+	groups, err := h.storage.ListClientGroups()
+	if err != nil {
+		h.sendJSON(w, http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+	// Attach member counts for the list view.
+	type groupWithCount struct {
+		*models.ClientGroup
+		MemberCount int `json:"member_count"`
+	}
+	out := make([]groupWithCount, 0, len(groups))
+	for _, g := range groups {
+		members, _ := h.storage.ListClientsInGroup(g.ID)
+		out = append(out, groupWithCount{ClientGroup: g, MemberCount: len(members)})
+	}
+	h.sendJSON(w, http.StatusOK, Response{Success: true, Data: out})
+}
+
+func (h *Handler) GetClientGroup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.sendJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Error: "Method not allowed"})
+		return
+	}
+	id, err := strconv.ParseUint(r.URL.Query().Get("id"), 10, 32)
+	if err != nil {
+		h.sendJSON(w, http.StatusBadRequest, Response{Success: false, Error: "Invalid group ID"})
+		return
+	}
+	group, err := h.storage.GetClientGroup(uint(id))
+	if err != nil {
+		h.sendJSON(w, http.StatusNotFound, Response{Success: false, Error: "Group not found"})
+		return
+	}
+	members, _ := h.storage.ListClientsInGroup(group.ID)
+	group.Clients = make([]models.Client, 0, len(members))
+	for _, m := range members {
+		group.Clients = append(group.Clients, *m)
+	}
+	h.sendJSON(w, http.StatusOK, Response{Success: true, Data: group})
+}
+
+func (h *Handler) CreateClientGroup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.sendJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Error: "Method not allowed"})
+		return
+	}
+	var group models.ClientGroup
+	if err := json.NewDecoder(r.Body).Decode(&group); err != nil {
+		h.sendJSON(w, http.StatusBadRequest, Response{Success: false, Error: "Invalid request body"})
+		return
+	}
+	if group.Name == "" {
+		h.sendJSON(w, http.StatusBadRequest, Response{Success: false, Error: "Group name is required"})
+		return
+	}
+	if err := h.storage.CreateClientGroup(&group); err != nil {
+		h.sendJSON(w, http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+	log.Printf("Created client group: %s (ID: %d)", group.Name, group.ID)
+	h.sendJSON(w, http.StatusOK, Response{Success: true, Message: "Client group created", Data: group})
+}
+
+func (h *Handler) UpdateClientGroup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		h.sendJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Error: "Method not allowed"})
+		return
+	}
+	id, err := strconv.ParseUint(r.URL.Query().Get("id"), 10, 32)
+	if err != nil {
+		h.sendJSON(w, http.StatusBadRequest, Response{Success: false, Error: "Invalid group ID"})
+		return
+	}
+	var group models.ClientGroup
+	if err := json.NewDecoder(r.Body).Decode(&group); err != nil {
+		h.sendJSON(w, http.StatusBadRequest, Response{Success: false, Error: "Invalid request body"})
+		return
+	}
+	group.ID = uint(id)
+	// Apply membership changes if a members array was provided. Members are a
+	// list of MAC addresses; anything previously in the group but not in the
+	// new list gets detached.
+	type groupWithMembers struct {
+		Members []string `json:"members"`
+	}
+	// Re-decode body to catch the members field — the earlier decode only
+	// consumed the ClientGroup fields.
+	var withMembers groupWithMembers
+	// We can't re-read r.Body, so if the caller wants to manage members they
+	// must call /api/client-groups/members instead. Leaving this block as a
+	// placeholder for clarity.
+	_ = withMembers
+
+	if err := h.storage.UpdateClientGroup(uint(id), &group); err != nil {
+		h.sendJSON(w, http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+	log.Printf("Updated client group: %s (ID: %d)", group.Name, group.ID)
+	h.sendJSON(w, http.StatusOK, Response{Success: true, Message: "Client group updated", Data: group})
+}
+
+func (h *Handler) DeleteClientGroup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		h.sendJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Error: "Method not allowed"})
+		return
+	}
+	id, err := strconv.ParseUint(r.URL.Query().Get("id"), 10, 32)
+	if err != nil {
+		h.sendJSON(w, http.StatusBadRequest, Response{Success: false, Error: "Invalid group ID"})
+		return
+	}
+	group, err := h.storage.GetClientGroup(uint(id))
+	if err != nil {
+		h.sendJSON(w, http.StatusNotFound, Response{Success: false, Error: "Group not found"})
+		return
+	}
+	if err := h.storage.DeleteClientGroup(uint(id)); err != nil {
+		h.sendJSON(w, http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+	log.Printf("Deleted client group: %s (ID: %d)", group.Name, group.ID)
+	h.sendJSON(w, http.StatusOK, Response{Success: true, Message: "Client group deleted"})
+}
+
+// SetClientGroupMembership assigns a MAC to a group (or clears it with null).
+func (h *Handler) SetClientGroupMembership(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.sendJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Error: "Method not allowed"})
+		return
+	}
+	var req struct {
+		MACAddress string `json:"mac_address"`
+		GroupID    *uint  `json:"group_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.sendJSON(w, http.StatusBadRequest, Response{Success: false, Error: "Invalid request body"})
+		return
+	}
+	if req.MACAddress == "" {
+		h.sendJSON(w, http.StatusBadRequest, Response{Success: false, Error: "mac_address is required"})
+		return
+	}
+	if err := h.storage.SetClientGroup(req.MACAddress, req.GroupID); err != nil {
+		h.sendJSON(w, http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+	h.sendJSON(w, http.StatusOK, Response{Success: true, Message: "Client group membership updated"})
+}
+
+// WakeClientGroup sends Wake-on-LAN to every enabled member of a group,
+// honouring the group's stagger delay to avoid broadcast storms.
+func (h *Handler) WakeClientGroup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.sendJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Error: "Method not allowed"})
+		return
+	}
+	id, err := strconv.ParseUint(r.URL.Query().Get("id"), 10, 32)
+	if err != nil {
+		h.sendJSON(w, http.StatusBadRequest, Response{Success: false, Error: "Invalid group ID"})
+		return
+	}
+	group, err := h.storage.GetClientGroup(uint(id))
+	if err != nil {
+		h.sendJSON(w, http.StatusNotFound, Response{Success: false, Error: "Group not found"})
+		return
+	}
+	members, err := h.storage.ListClientsInGroup(uint(id))
+	if err != nil {
+		h.sendJSON(w, http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+	broadcastAddr := h.wolBroadcastAddr
+	if group.WOLBroadcastAddr != "" {
+		broadcastAddr = group.WOLBroadcastAddr
+	}
+	// Fire-and-forget so the caller isn't blocked while we stagger through a
+	// large fleet. Errors per-client are logged but don't fail the request.
+	stagger := time.Duration(group.StaggerDelayMillis) * time.Millisecond
+	sent := 0
+	for _, c := range members {
+		if !c.Enabled {
+			continue
+		}
+		sent++
+	}
+	go func(macs []string, bcast string, gap time.Duration) {
+		for i, mac := range macs {
+			if i > 0 && gap > 0 {
+				time.Sleep(gap)
+			}
+			if err := wol.SendMagicPacket(mac, bcast); err != nil {
+				log.Printf("ClientGroup wake: failed for %s: %v", mac, err)
+			} else {
+				log.Printf("ClientGroup wake: sent to %s (broadcast: %s)", mac, bcast)
+			}
+		}
+	}(collectEnabledMACs(members), broadcastAddr, stagger)
+
+	log.Printf("Admin: Wake-on-LAN bulk sent to group %s (%d enabled members, stagger %s)",
+		group.Name, sent, stagger)
+	h.sendJSON(w, http.StatusOK, Response{
+		Success: true,
+		Message: fmt.Sprintf("Wake-on-LAN sent to %d member(s) of %s", sent, group.Name),
+	})
+}
+
+// SetNextBootForClientGroup sets (or clears) the next-boot image for every
+// enabled member of a group.
+func (h *Handler) SetNextBootForClientGroup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.sendJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Error: "Method not allowed"})
+		return
+	}
+	id, err := strconv.ParseUint(r.URL.Query().Get("id"), 10, 32)
+	if err != nil {
+		h.sendJSON(w, http.StatusBadRequest, Response{Success: false, Error: "Invalid group ID"})
+		return
+	}
+	var req struct {
+		ImageFilename string `json:"image_filename"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.sendJSON(w, http.StatusBadRequest, Response{Success: false, Error: "Invalid request body"})
+		return
+	}
+	group, err := h.storage.GetClientGroup(uint(id))
+	if err != nil {
+		h.sendJSON(w, http.StatusNotFound, Response{Success: false, Error: "Group not found"})
+		return
+	}
+	members, err := h.storage.ListClientsInGroup(uint(id))
+	if err != nil {
+		h.sendJSON(w, http.StatusInternalServerError, Response{Success: false, Error: err.Error()})
+		return
+	}
+	applied := 0
+	for _, c := range members {
+		if !c.Enabled {
+			continue
+		}
+		if req.ImageFilename == "" {
+			if err := h.storage.ClearNextBootImage(c.MACAddress); err != nil {
+				log.Printf("ClientGroup next-boot clear failed for %s: %v", c.MACAddress, err)
+				continue
+			}
+		} else {
+			if err := h.storage.SetNextBootImage(c.MACAddress, req.ImageFilename); err != nil {
+				log.Printf("ClientGroup next-boot set failed for %s: %v", c.MACAddress, err)
+				continue
+			}
+		}
+		applied++
+	}
+	msg := fmt.Sprintf("Cleared next-boot for %d member(s) of %s", applied, group.Name)
+	if req.ImageFilename != "" {
+		msg = fmt.Sprintf("Set next-boot=%s for %d member(s) of %s", req.ImageFilename, applied, group.Name)
+	}
+	log.Printf("Admin: %s", msg)
+	h.sendJSON(w, http.StatusOK, Response{Success: true, Message: msg})
+}
+
+func collectEnabledMACs(clients []*models.Client) []string {
+	out := make([]string, 0, len(clients))
+	for _, c := range clients {
+		if c.Enabled {
+			out = append(out, c.MACAddress)
+		}
+	}
+	return out
 }
 
 func (h *Handler) GetMenuTheme(w http.ResponseWriter, r *http.Request) {

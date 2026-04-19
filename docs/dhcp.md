@@ -52,7 +52,7 @@ Off by default so existing installs that already run dnsmasq/ISC-DHCP/etc. aren'
 
 ### Requirements and caveats
 
-- **Binds UDP/67.** Requires `CAP_NET_BIND_SERVICE` or root. In Docker, the default image already runs as root so no extra capability needed; add `--cap-add NET_BIND_SERVICE` only for rootless setups.
+- **Binds UDP/67 and UDP/4011.** UDP/67 requires `CAP_NET_BIND_SERVICE` or root; UDP/4011 is the PXE boot-server discovery port that some UEFI ROMs (notably AMI/Supermicro) follow up on after the initial offer. In Docker, the default image already runs as root so no extra capability needed; add `--cap-add NET_BIND_SERVICE` only for rootless setups.
 - **Same broadcast domain.** proxyDHCP relies on seeing client DHCP broadcasts. It works on a flat LAN or a single VLAN. If your network uses a DHCP relay (`ip helper-address`) to forward DHCP across VLANs, the relay forwards to your main DHCP but not to Bootimus — add Bootimus as an additional relay target, or keep targets on the same VLAN as Bootimus.
 - **Docker networking.** Use `macvlan`, `ipvlan`, or `network_mode: host` so the container is a first-class participant on the broadcast domain. A default bridge network will not work — broadcasts get trapped inside `docker0`.
 - **Two proxyDHCP servers on the same LAN is legal, but debugging is a nightmare.** If you enable Bootimus's built-in proxyDHCP, disable any existing dnsmasq proxyDHCP advertising PXE on the same network.
@@ -68,6 +68,7 @@ services:
       BOOTIMUS_SERVER_ADDR: 10.76.42.41    # the container's macvlan IP
     ports:
       - "67:67/udp"                         # proxyDHCP
+      - "4011:4011/udp"                     # PXE boot-server discovery
       - "69:69/udp"                         # TFTP
       - "8080:8080/tcp"
       - "8081:8081/tcp"
@@ -89,7 +90,7 @@ networks:
 Container logs should show:
 
 ```
-proxyDHCP: listening on UDP/67, advertising next-server=10.76.42.41 (BIOS=undionly.kpxe, UEFI=bootimus.efi, ARM64=bootimus-arm64.efi)
+proxyDHCP: listening on UDP/67 + UDP/4011, advertising next-server=10.76.42.41 (BIOS=undionly.kpxe, UEFI=bootimus.efi, ARM64=bootimus-arm64.efi)
 ```
 
 And per-client lines when a PXE boot happens:
@@ -119,34 +120,22 @@ To enable PXE network booting, your DHCP server must be configured to:
 
 | Client Type | DHCP Filename | Notes |
 |-------------|---------------|-------|
-| UEFI (no Secure Boot) | `ipxe.efi` | Custom-built with embedded script |
-| UEFI Secure Boot (x86_64) | `bootimus-shimx64.efi` | Microsoft-signed shim, loads signed iPXE |
-| UEFI Secure Boot (ARM64) | `bootimus-shimaa64.efi` | Microsoft-signed shim, loads signed iPXE |
+| UEFI (x86_64) | `bootimus.efi` (or `ipxe.efi`) | Custom-built iPXE with embedded script |
+| UEFI (ARM64) | `bootimus-arm64.efi` (or `ipxe-arm64.efi`) | Custom-built iPXE with embedded script |
 | Legacy BIOS | `undionly.kpxe` | Standard PXE bootloader |
+
+> **Secure Boot:** Bootimus does not currently ship Microsoft-signed Secure Boot binaries. If your target machines have Secure Boot enabled, either disable it in firmware, or enrol Bootimus's iPXE build into the firmware's Secure Boot keystore (MOK).
 
 ### Boot Flow
 
 ```
 Client → DHCP Request
       ← DHCP Offer (IP, next-server, bootloader filename)
-Client → TFTP Request for bootloader (ipxe.efi or undionly.kpxe)
+Client → TFTP Request for bootloader (bootimus.efi or undionly.kpxe)
       ← Bootloader downloaded
 Client → HTTP Request for menu.ipxe
       ← Boot menu displayed
 Client → Boot selected ISO
-```
-
-### Secure Boot Flow
-
-```
-Client → DHCP Request
-      ← DHCP Offer (IP, next-server, bootimus-shimx64.efi)
-Client → TFTP Request for bootimus-shimx64.efi (Microsoft-signed shim)
-      ← Shim downloaded, verified by UEFI firmware
-Shim   → TFTP Request for bootimus.efi (iPXE signed by iPXE CA)
-      ← Signed iPXE downloaded, verified by shim
-iPXE   → DHCP Request, loads autoexec.ipxe from TFTP
-      ← Boot menu displayed
 ```
 
 ## ISC DHCP Server

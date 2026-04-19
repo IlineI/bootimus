@@ -1,0 +1,8 @@
+auto lo
+iface lo inet loopback
+
+# DHCP on every Ethernet interface bootimus sees. Alpine's ifquery aliases
+# "eth0" to whatever the first ethernet interface actually is, so this works
+# across different hardware without knowing the NIC name in advance.
+auto eth0
+iface eth0 inet dhcp

@@ -48,6 +48,7 @@ func (s *PostgresStore) AutoMigrate() error {
 
 	if err := s.db.AutoMigrate(
 		&models.User{},
+		&models.ClientGroup{},
 		&models.Client{},
 		&models.ImageGroup{},
 		&models.Image{},
@@ -58,6 +59,8 @@ func (s *PostgresStore) AutoMigrate() error {
 		&models.BootTool{},
 		&models.HardwareInventory{},
 		&models.DistroProfile{},
+		&models.WebhookConfig{},
+		&models.ScheduledTask{},
 	); err != nil {
 		return err
 	}
@@ -195,7 +198,8 @@ func (s *PostgresStore) CreateClient(client *models.Client) error {
 
 func (s *PostgresStore) UpdateClient(mac string, client *models.Client) error {
 	return s.db.Model(&models.Client{}).Where("mac_address = ?", mac).
-		Select("Name", "Description", "Enabled", "ShowPublicImages", "BootloaderSet", "Static", "UpdatedAt").
+		Select("Name", "Description", "Enabled", "ShowPublicImages", "BootloaderSet", "Static", "ClientGroupID",
+			"IPMIHost", "IPMIPort", "IPMIUsername", "IPMIPassword", "IPMIInsecure", "UpdatedAt").
 		Updates(client).Error
 }
 
@@ -376,11 +380,27 @@ func (s *PostgresStore) GetClientImages(mac string) ([]string, error) {
 func (s *PostgresStore) GetImagesForClient(macAddress string) ([]models.Image, error) {
 	var client models.Client
 	if err := s.db.Where("mac_address = ? AND enabled = ?", macAddress, true).First(&client).Error; err == nil {
-		log.Printf("GetImagesForClient: client=%s, AllowedImages=%v, ShowPublicImages=%v", macAddress, client.AllowedImages, client.ShowPublicImages)
+		allowed := append([]string{}, client.AllowedImages...)
+		if client.ClientGroupID != nil {
+			var group models.ClientGroup
+			if err := s.db.Where("id = ? AND enabled = ?", *client.ClientGroupID, true).First(&group).Error; err == nil {
+				seen := make(map[string]bool, len(allowed))
+				for _, f := range allowed {
+					seen[f] = true
+				}
+				for _, f := range group.AllowedImages {
+					if !seen[f] {
+						allowed = append(allowed, f)
+						seen[f] = true
+					}
+				}
+			}
+		}
+		log.Printf("GetImagesForClient: client=%s, AllowedImages=%v, ShowPublicImages=%v", macAddress, allowed, client.ShowPublicImages)
 		var assigned []models.Image
-		if len(client.AllowedImages) > 0 {
-			s.db.Where("filename IN (?) AND enabled = ?", []string(client.AllowedImages), true).Find(&assigned)
-			log.Printf("GetImagesForClient: found %d assigned images for %v", len(assigned), client.AllowedImages)
+		if len(allowed) > 0 {
+			s.db.Where("filename IN (?) AND enabled = ?", allowed, true).Find(&assigned)
+			log.Printf("GetImagesForClient: found %d assigned images for %v", len(assigned), allowed)
 		}
 
 		if client.ShowPublicImages {
@@ -717,6 +737,18 @@ func (s *PostgresStore) GetBootLogs(limit int) ([]models.BootLog, error) {
 	return logs, nil
 }
 
+func (s *PostgresStore) GetBootLogsByMAC(macAddress string, limit int) ([]models.BootLog, error) {
+	var logs []models.BootLog
+	if err := s.db.Preload("Client").Preload("Image").
+		Where("mac_address = ?", macAddress).
+		Order("created_at DESC").
+		Limit(limit).
+		Find(&logs).Error; err != nil {
+		return nil, err
+	}
+	return logs, nil
+}
+
 
 func (s *PostgresStore) SaveHardwareInventory(inv *models.HardwareInventory) error {
 	if inv.MACAddress != "" {
@@ -807,4 +839,135 @@ func (s *PostgresStore) GetMenuTheme() (*models.MenuTheme, error) {
 func (s *PostgresStore) UpdateMenuTheme(theme *models.MenuTheme) error {
 	theme.ID = 1
 	return s.db.Save(theme).Error
+}
+
+func (s *PostgresStore) ListScheduledTasks() ([]*models.ScheduledTask, error) {
+	var tasks []*models.ScheduledTask
+	if err := s.db.Preload("ClientGroup").Order("name ASC").Find(&tasks).Error; err != nil {
+		return nil, err
+	}
+	return tasks, nil
+}
+
+func (s *PostgresStore) ListScheduledTasksByGroup(groupID uint) ([]*models.ScheduledTask, error) {
+	var tasks []*models.ScheduledTask
+	if err := s.db.Where("client_group_id = ?", groupID).Order("name ASC").Find(&tasks).Error; err != nil {
+		return nil, err
+	}
+	return tasks, nil
+}
+
+func (s *PostgresStore) GetScheduledTask(id uint) (*models.ScheduledTask, error) {
+	var t models.ScheduledTask
+	if err := s.db.Preload("ClientGroup").First(&t, id).Error; err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
+
+func (s *PostgresStore) CreateScheduledTask(task *models.ScheduledTask) error {
+	return s.db.Create(task).Error
+}
+
+func (s *PostgresStore) UpdateScheduledTask(id uint, task *models.ScheduledTask) error {
+	return s.db.Model(&models.ScheduledTask{}).Where("id = ?", id).
+		Select("Name", "Enabled", "CronExpr", "ClientGroupID", "ActionType", "ActionParam", "UpdatedAt").
+		Updates(task).Error
+}
+
+func (s *PostgresStore) DeleteScheduledTask(id uint) error {
+	return s.db.Delete(&models.ScheduledTask{}, id).Error
+}
+
+func (s *PostgresStore) RecordScheduledTaskRun(id uint, status, errorMsg string) error {
+	now := time.Now()
+	return s.db.Model(&models.ScheduledTask{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"last_run":    now,
+		"last_status": status,
+		"last_error":  errorMsg,
+		"run_count":   gorm.Expr("run_count + 1"),
+	}).Error
+}
+
+func (s *PostgresStore) GetWebhookConfig() (*models.WebhookConfig, error) {
+	var cfg models.WebhookConfig
+	if err := s.db.First(&cfg, 1).Error; err != nil {
+		return &models.WebhookConfig{ID: 1, OnBootStarted: true, OnClientDiscovered: true}, nil
+	}
+	return &cfg, nil
+}
+
+func (s *PostgresStore) UpdateWebhookConfig(cfg *models.WebhookConfig) error {
+	cfg.ID = 1
+	return s.db.Save(cfg).Error
+}
+
+func (s *PostgresStore) ListClientGroups() ([]*models.ClientGroup, error) {
+	var groups []*models.ClientGroup
+	if err := s.db.Order("name ASC").Find(&groups).Error; err != nil {
+		return nil, err
+	}
+	return groups, nil
+}
+
+func (s *PostgresStore) GetClientGroup(id uint) (*models.ClientGroup, error) {
+	var group models.ClientGroup
+	if err := s.db.First(&group, id).Error; err != nil {
+		return nil, err
+	}
+	return &group, nil
+}
+
+func (s *PostgresStore) GetClientGroupByName(name string) (*models.ClientGroup, error) {
+	var group models.ClientGroup
+	if err := s.db.Where("name = ?", name).First(&group).Error; err != nil {
+		return nil, err
+	}
+	return &group, nil
+}
+
+func (s *PostgresStore) CreateClientGroup(group *models.ClientGroup) error {
+	var existing models.ClientGroup
+	if err := s.db.Unscoped().Where("name = ? AND deleted_at IS NOT NULL", group.Name).First(&existing).Error; err == nil {
+		existing.DeletedAt = gorm.DeletedAt{}
+		existing.Description = group.Description
+		existing.Enabled = group.Enabled
+		existing.AllowedImages = group.AllowedImages
+		existing.BootloaderSet = group.BootloaderSet
+		existing.WOLBroadcastAddr = group.WOLBroadcastAddr
+		existing.StaggerDelayMillis = group.StaggerDelayMillis
+		if err := s.db.Unscoped().Save(&existing).Error; err != nil {
+			return err
+		}
+		group.ID = existing.ID
+		return nil
+	}
+	return s.db.Create(group).Error
+}
+
+func (s *PostgresStore) UpdateClientGroup(id uint, group *models.ClientGroup) error {
+	return s.db.Model(&models.ClientGroup{}).Where("id = ?", id).
+		Select("Name", "Description", "Enabled", "AllowedImages", "BootloaderSet", "WOLBroadcastAddr", "StaggerDelayMillis",
+			"IPMIPort", "IPMIUsername", "IPMIPassword", "IPMIInsecure", "UpdatedAt").
+		Updates(group).Error
+}
+
+func (s *PostgresStore) DeleteClientGroup(id uint) error {
+	if err := s.db.Model(&models.Client{}).Where("client_group_id = ?", id).Update("client_group_id", nil).Error; err != nil {
+		return err
+	}
+	return s.db.Delete(&models.ClientGroup{}, id).Error
+}
+
+func (s *PostgresStore) ListClientsInGroup(groupID uint) ([]*models.Client, error) {
+	var clients []*models.Client
+	if err := s.db.Where("client_group_id = ?", groupID).Order("name ASC").Find(&clients).Error; err != nil {
+		return nil, err
+	}
+	return clients, nil
+}
+
+func (s *PostgresStore) SetClientGroup(mac string, groupID *uint) error {
+	return s.db.Model(&models.Client{}).Where("mac_address = ?", mac).
+		Update("client_group_id", groupID).Error
 }

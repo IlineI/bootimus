@@ -24,15 +24,21 @@ import (
 	"bootimus/bootloaders"
 	"bootimus/internal/admin"
 	"bootimus/internal/auth"
+	"bootimus/internal/metrics"
 	"bootimus/internal/models"
 	"bootimus/internal/nbd"
 	"bootimus/internal/profiles"
 	"bootimus/internal/proxydhcp"
+	"bootimus/internal/redfish"
+	"bootimus/internal/scheduler"
 	"bootimus/internal/storage"
 	"bootimus/internal/tools"
+	"bootimus/internal/webhook"
+	"bootimus/internal/wol"
 	"bootimus/web"
 
 	"github.com/pin/tftp/v3"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var Version = "dev"
@@ -93,6 +99,10 @@ type Server struct {
 	adminServer        *http.Server
 	tftpServer         *tftp.Server
 	proxyDHCPServer    *proxydhcp.Server
+	webhookNotifier    *webhook.Notifier
+	scheduler          *scheduler.Scheduler
+	bootLogDedup       map[string]time.Time
+	bootLogDedupMu     sync.Mutex
 	wg                 sync.WaitGroup
 	activeSessions     *ActiveSessions
 	logBroadcaster     *LogBroadcaster
@@ -286,9 +296,12 @@ func New(cfg *Config) *Server {
 		activeSessions: &ActiveSessions{
 			sessions: make(map[string]*ActiveSession),
 		},
-		logBroadcaster: lb,
-		toolsManager:   tm,
+		logBroadcaster:  lb,
+		toolsManager:    tm,
+		bootLogDedup:    make(map[string]time.Time),
+		webhookNotifier: webhook.New(cfg.Storage),
 	}
+	s.scheduler = scheduler.New(cfg.Storage, s.executeScheduledTask)
 	s.loadBootloaderConfig()
 	return s
 }
@@ -481,6 +494,10 @@ func (s *Server) Start() error {
 		}()
 	}
 
+	if s.scheduler != nil {
+		s.scheduler.Start()
+	}
+
 	if s.config.ProxyDHCPEnabled {
 		pd, err := proxydhcp.NewServer(proxydhcp.Config{
 			ServerIP:      net.ParseIP(s.config.ServerAddr),
@@ -538,6 +555,11 @@ func (s *Server) Shutdown() error {
 		} else {
 			log.Println("proxyDHCP server stopped")
 		}
+	}
+
+	if s.scheduler != nil {
+		s.scheduler.Stop()
+		log.Println("Scheduler stopped")
 	}
 
 	log.Println("Shutdown complete")
@@ -618,6 +640,7 @@ func (s *Server) startTFTPServer() error {
 			}
 
 			log.Printf("TFTP: Client requesting file: %s", filename)
+			metrics.TFTPRequests.WithLabelValues(cleanPath).Inc()
 
 			if cleanPath == "autoexec.ipxe" {
 				serverAddr := "${next-server}"
@@ -870,6 +893,8 @@ func (s *Server) startHTTPServer() error {
 
 		if r.Header.Get("Range") == "" {
 			s.logAndBroadcast("Boot File: Serving %s (%d MB) to MAC %s (IP: %s)", decodedPath, fileInfo.Size()/1024/1024, macAddress, r.RemoteAddr)
+			s.recordBootIfNew(macAddress, decodedPath, r.RemoteAddr)
+			metrics.HTTPBootRequests.Inc()
 		}
 		w.Header().Set("Content-Type", "application/octet-stream")
 		http.ServeFile(w, r, fullPath)
@@ -922,6 +947,12 @@ func (s *Server) startAdminServer() error {
 
 	s.setupAdminInterface(mux)
 
+	// Prometheus metrics endpoint — unauthenticated, consistent with how
+	// most monitoring scrapers expect /metrics to behave. Bind to admin
+	// port so it's not exposed on the public HTTP port.
+	mux.Handle("/metrics", promhttp.Handler())
+	go s.refreshMetricsGauges()
+
 	addr := fmt.Sprintf(":%d", s.config.AdminPort)
 	s.adminServer = &http.Server{
 		Addr:    addr,
@@ -938,7 +969,11 @@ func (s *Server) startAdminServer() error {
 func (s *Server) setupAdminInterface(mux *http.ServeMux) {
 	log.Println("Setting up admin interface")
 
-	adminHandler := admin.NewHandler(s.config.Storage, s.config.DataDir, s.config.ISODir, s.config.BootDir, Version, s, s.toolsManager, s.config.WOLBroadcastAddr, s.config.ProfileManager, s.config.ProxyDHCPEnabled)
+	adminHandler := admin.NewHandler(s.config.Storage, s.config.DataDir, s.config.ISODir, s.config.BootDir, Version, s, s.toolsManager, s.config.WOLBroadcastAddr, s.config.ProfileManager, s.config.ProxyDHCPEnabled, s.config.HTTPPort)
+	if s.scheduler != nil {
+		adminHandler.SchedulerReload = s.scheduler.Reload
+		adminHandler.SchedulerRunNow = s.scheduler.RunNow
+	}
 
 	staticFS, err := fs.Sub(web.Static, "static")
 	if err != nil {
@@ -1139,6 +1174,56 @@ func (s *Server) setupAdminInterface(mux *http.ServeMux) {
 	mux.HandleFunc("/api/groups/update", authWrap(adminHandler.UpdateImageGroup))
 	mux.HandleFunc("/api/groups/delete", authWrap(adminHandler.DeleteImageGroup))
 
+	mux.HandleFunc("/api/clients/import", authWrap(adminHandler.ImportClientsCSV))
+	mux.HandleFunc("/api/backup/export", authWrap(adminHandler.ExportBackup))
+
+	mux.HandleFunc("/api/webhook", authWrap(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			adminHandler.GetWebhookConfig(w, r)
+		case http.MethodPut, http.MethodPost:
+			adminHandler.UpdateWebhookConfig(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+	mux.HandleFunc("/api/webhook/test", authWrap(adminHandler.TestWebhook))
+
+	mux.HandleFunc("/api/client-groups", authWrap(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			adminHandler.ListClientGroups(w, r)
+		case http.MethodPost:
+			adminHandler.CreateClientGroup(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+	mux.HandleFunc("/api/client-groups/get", authWrap(adminHandler.GetClientGroup))
+	mux.HandleFunc("/api/client-groups/update", authWrap(adminHandler.UpdateClientGroup))
+	mux.HandleFunc("/api/client-groups/delete", authWrap(adminHandler.DeleteClientGroup))
+	mux.HandleFunc("/api/client-groups/membership", authWrap(adminHandler.SetClientGroupMembership))
+	mux.HandleFunc("/api/client-groups/wake", authWrap(adminHandler.WakeClientGroup))
+	mux.HandleFunc("/api/client-groups/next-boot", authWrap(adminHandler.SetNextBootForClientGroup))
+	mux.HandleFunc("/api/client-groups/power", authWrap(adminHandler.PowerClientGroup))
+
+	mux.HandleFunc("/api/scheduled-tasks", authWrap(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			adminHandler.ListScheduledTasks(w, r)
+		case http.MethodPost:
+			adminHandler.CreateScheduledTask(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+	mux.HandleFunc("/api/scheduled-tasks/update", authWrap(adminHandler.UpdateScheduledTask))
+	mux.HandleFunc("/api/scheduled-tasks/delete", authWrap(adminHandler.DeleteScheduledTask))
+	mux.HandleFunc("/api/scheduled-tasks/run", authWrap(adminHandler.RunScheduledTask))
+
+	mux.HandleFunc("/api/clients/power", authWrap(adminHandler.PowerClient))
+	mux.HandleFunc("/api/clients/power/status", authWrap(adminHandler.PowerStatusClient))
+
 	mux.HandleFunc("/api/theme", authWrap(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
@@ -1231,6 +1316,214 @@ chain http://%s:%d/inventory?mac=%s&cpu=${cpuid/0}&memsize=${memsize}&platform=$
 	w.Write([]byte(script))
 }
 
+// executeScheduledTask is the Runner bound to the scheduler package. It maps
+// a ScheduledTask's action_type to the underlying bulk primitive and returns
+// a status + error for the run-history row.
+func (s *Server) executeScheduledTask(ctx context.Context, t *models.ScheduledTask) (string, string) {
+	if s.config.Storage == nil {
+		return "failed", "storage unavailable"
+	}
+	members, err := s.config.Storage.ListClientsInGroup(t.ClientGroupID)
+	if err != nil {
+		return "failed", err.Error()
+	}
+	group, _ := s.config.Storage.GetClientGroup(t.ClientGroupID)
+
+	switch t.ActionType {
+	case "wake":
+		broadcast := s.config.WOLBroadcastAddr
+		if group != nil && group.WOLBroadcastAddr != "" {
+			broadcast = group.WOLBroadcastAddr
+		}
+		sent := 0
+		stagger := time.Duration(0)
+		if group != nil {
+			stagger = time.Duration(group.StaggerDelayMillis) * time.Millisecond
+		}
+		for i, c := range members {
+			if !c.Enabled {
+				continue
+			}
+			if i > 0 && stagger > 0 {
+				time.Sleep(stagger)
+			}
+			if err := wol.SendMagicPacket(c.MACAddress, broadcast); err != nil {
+				log.Printf("scheduler wake: %s failed: %v", c.MACAddress, err)
+				continue
+			}
+			sent++
+		}
+		return "ok", fmt.Sprintf("woke %d/%d", sent, len(members))
+
+	case "next-boot":
+		image := t.ActionParam
+		applied := 0
+		for _, c := range members {
+			if !c.Enabled {
+				continue
+			}
+			if err := s.config.Storage.SetNextBootImage(c.MACAddress, image); err != nil {
+				continue
+			}
+			applied++
+		}
+		return "ok", fmt.Sprintf("set on %d/%d", applied, len(members))
+
+	case "next-boot-clear":
+		cleared := 0
+		for _, c := range members {
+			if err := s.config.Storage.ClearNextBootImage(c.MACAddress); err == nil {
+				cleared++
+			}
+		}
+		return "ok", fmt.Sprintf("cleared %d/%d", cleared, len(members))
+
+	case "power":
+		action := t.ActionParam
+		if action == "" {
+			return "failed", "power action requires action_param (On/ForceOff/ForceRestart/etc)"
+		}
+		dispatched := 0
+		stagger := time.Duration(0)
+		if group != nil {
+			stagger = time.Duration(group.StaggerDelayMillis) * time.Millisecond
+		}
+		for _, c := range members {
+			if !c.Enabled {
+				continue
+			}
+			host, port, user, pass, insecure := resolveRedfishForClient(c, group)
+			if host == "" || user == "" || pass == "" {
+				continue
+			}
+			dispatched++
+			go func(mac, host string, port int, user, pass string, insecure bool) {
+				rctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+				defer cancel()
+				client := redfish.New(host, port, user, pass, insecure)
+				if err := client.SetPower(rctx, redfish.PowerAction(action)); err != nil {
+					log.Printf("scheduler power %s on %s failed: %v", action, mac, err)
+				}
+			}(c.MACAddress, host, port, user, pass, insecure)
+			if stagger > 0 {
+				time.Sleep(stagger)
+			}
+		}
+		return "ok", fmt.Sprintf("dispatched to %d/%d", dispatched, len(members))
+
+	default:
+		return "failed", "unknown action_type: " + t.ActionType
+	}
+}
+
+// resolveRedfishForClient merges per-client Redfish settings with its group
+// defaults. Duplicates the same logic as the admin handler but kept here to
+// avoid a circular import between server/admin.
+func resolveRedfishForClient(c *models.Client, g *models.ClientGroup) (host string, port int, user string, pass string, insecure bool) {
+	host = c.IPMIHost
+	port = c.IPMIPort
+	user = c.IPMIUsername
+	pass = c.IPMIPassword
+	insecure = c.IPMIInsecure
+	if g != nil {
+		if port == 0 {
+			port = g.IPMIPort
+		}
+		if user == "" {
+			user = g.IPMIUsername
+		}
+		if pass == "" {
+			pass = g.IPMIPassword
+		}
+		if !insecure {
+			insecure = g.IPMIInsecure
+		}
+	}
+	return
+}
+
+// refreshMetricsGauges updates the "totals" gauges every 30s. Counters are
+// incremented at event time elsewhere; gauges just mirror DB state.
+func (s *Server) refreshMetricsGauges() {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for {
+		if s.config.Storage != nil {
+			if stats, err := s.config.Storage.GetStats(); err == nil {
+				if n, ok := stats["clients"]; ok {
+					metrics.ClientsTotal.Set(float64(n))
+				}
+				if n, ok := stats["images"]; ok {
+					metrics.ImagesTotal.Set(float64(n))
+				}
+			}
+		}
+		metrics.ActiveSessions.Set(float64(len(s.activeSessions.GetAll())))
+		<-ticker.C
+	}
+}
+
+// recordBootIfNew logs a boot attempt once per (MAC, image) within a short
+// dedup window. A single client boot generates many /boot/ requests (kernel,
+// initrd, squashfs, ucode, etc.) — we only want one BootLog row per boot.
+func (s *Server) recordBootIfNew(mac, path, remoteAddr string) {
+	if s.config.Storage == nil || mac == "" || mac == "unknown" {
+		return
+	}
+	// First path segment is the image cache directory (filename minus .iso).
+	slash := strings.Index(path, "/")
+	if slash <= 0 {
+		return
+	}
+	imageDir := path[:slash]
+
+	key := mac + "|" + imageDir
+	s.bootLogDedupMu.Lock()
+	now := time.Now()
+	if last, ok := s.bootLogDedup[key]; ok && now.Sub(last) < 30*time.Second {
+		s.bootLogDedupMu.Unlock()
+		return
+	}
+	s.bootLogDedup[key] = now
+	// Occasional GC — keep the map from growing unbounded.
+	if len(s.bootLogDedup) > 1024 {
+		for k, t := range s.bootLogDedup {
+			if now.Sub(t) > 10*time.Minute {
+				delete(s.bootLogDedup, k)
+			}
+		}
+	}
+	s.bootLogDedupMu.Unlock()
+
+	imageName := imageDir
+	if img, err := s.config.Storage.GetImage(imageDir + ".iso"); err == nil {
+		imageName = img.Name
+	}
+	metrics.BootAttempts.WithLabelValues(imageName).Inc()
+	go func() {
+		if err := s.config.Storage.LogBootAttempt(mac, imageName, remoteAddr, true, ""); err != nil {
+			log.Printf("Boot log: failed to write for %s: %v", mac, err)
+		}
+		s.config.Storage.UpdateClientBootStats(mac)
+		s.config.Storage.UpdateImageBootStats(imageName)
+	}()
+	clientName := ""
+	if c, err := s.config.Storage.GetClient(mac); err == nil {
+		clientName = c.Name
+	}
+	ip := remoteAddr
+	if i := strings.LastIndex(ip, ":"); i > 0 {
+		ip = ip[:i]
+	}
+	s.webhookNotifier.Fire(webhook.Event{
+		Event:      webhook.EventBootStarted,
+		MAC:        mac,
+		ClientName: clientName,
+		Image:      imageName,
+		IP:         ip,
+	})
+}
+
 func (s *Server) handleInventoryReport(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 
@@ -1266,12 +1559,48 @@ func (s *Server) handleInventoryReport(w http.ResponseWriter, r *http.Request) {
 		NICChip:      r.FormValue("nic_chip"),
 	}
 
+	// Detect whether this MAC is new so we can emit discovered vs updated.
+	isNewClient := false
+	if s.config.Storage != nil {
+		if _, err := s.config.Storage.GetClient(mac); err != nil {
+			isNewClient = true
+		}
+	}
+
 	if s.config.Storage != nil {
 		if err := s.config.Storage.SaveHardwareInventory(inv); err != nil {
 			log.Printf("Inventory: Failed to save for %s: %v", mac, err)
 		} else {
 			log.Printf("Inventory: Saved hardware info for %s (product: %s, manufacturer: %s, memory: %d)", mac, inv.Product, inv.Manufacturer, inv.Memory)
 		}
+	}
+
+	clientName := ""
+	if c, err := s.config.Storage.GetClient(mac); err == nil {
+		clientName = c.Name
+	}
+	ip := r.RemoteAddr
+	if i := strings.LastIndex(ip, ":"); i > 0 {
+		ip = ip[:i]
+	}
+	if isNewClient {
+		s.webhookNotifier.Fire(webhook.Event{
+			Event:      webhook.EventClientDiscovered,
+			MAC:        mac,
+			ClientName: clientName,
+			IP:         ip,
+			Metadata: map[string]string{
+				"product":      inv.Product,
+				"manufacturer": inv.Manufacturer,
+			},
+		})
+	} else {
+		s.webhookNotifier.Fire(webhook.Event{
+			Event:      webhook.EventInventoryUpdated,
+			MAC:        mac,
+			ClientName: clientName,
+			IP:         ip,
+		})
 	}
 
 	// Return iPXE script that chains to the boot menu
@@ -1434,7 +1763,10 @@ reboot
 		autoInstallURL := ""
 		autoInstallParam := ""
 		if img.AutoInstallEnabled && img.AutoInstallScript != "" {
-			autoInstallURL = fmt.Sprintf("http://%s:%d/autoinstall/%s", s.config.ServerAddr, s.config.HTTPPort, url.PathEscape(img.Filename))
+			// ${net0/mac} is expanded by iPXE before the kernel is booted, so the
+			// resulting kernel cmdline carries the literal MAC and the autoinstall
+			// endpoint can resolve the client for template variable substitution.
+			autoInstallURL = fmt.Sprintf("http://%s:%d/autoinstall/%s?mac=${net0/mac}", s.config.ServerAddr, s.config.HTTPPort, url.PathEscape(img.Filename))
 
 			switch img.AutoInstallScriptType {
 			case "preseed":
@@ -1643,6 +1975,34 @@ func (s *Server) handleAutoInstallScript(w http.ResponseWriter, r *http.Request)
 	}
 
 	script := image.AutoInstallScript
+
+	// Template substitution: {{MAC}}, {{CLIENT_NAME}}, {{HOSTNAME}}, {{IP}},
+	// {{SERVER_ADDR}}, {{IMAGE_NAME}}, {{IMAGE_FILENAME}}. Values are resolved
+	// per-client when the installer fetches the script.
+	mac := strings.ToLower(strings.ReplaceAll(r.URL.Query().Get("mac"), "-", ":"))
+	clientName := ""
+	if mac != "" && s.config.Storage != nil {
+		if c, err := s.config.Storage.GetClient(mac); err == nil {
+			clientName = c.Name
+		}
+	}
+	clientIP := r.RemoteAddr
+	if i := strings.LastIndex(clientIP, ":"); i > 0 {
+		clientIP = clientIP[:i]
+	}
+	substitutions := map[string]string{
+		"{{MAC}}":            mac,
+		"{{CLIENT_NAME}}":    clientName,
+		"{{HOSTNAME}}":       clientName,
+		"{{IP}}":             clientIP,
+		"{{SERVER_ADDR}}":    s.config.ServerAddr,
+		"{{IMAGE_NAME}}":     image.Name,
+		"{{IMAGE_FILENAME}}": image.Filename,
+	}
+	for k, v := range substitutions {
+		script = strings.ReplaceAll(script, k, v)
+	}
+
 	if len(customFiles) > 0 && image.Distro == "arch" {
 		script = s.injectArchFileDownloads(script, customFiles)
 	}

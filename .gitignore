@@ -34,3 +34,14 @@ go.work
 .admin_password
 dist/
 bootloaders/bootenv/
+
+# Appliance build artefacts — never committed.
+appliance/build/
+*.img
+
+# Thinos-era blobs occasionally regenerated during development.
+bootloaders/thinos-kernel
+bootloaders/thinos-initrd
+
+# Cross-compile staging / test output.
+/tmp-build/

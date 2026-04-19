@@ -9,7 +9,11 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strconv"
 	"sync"
+	"syscall"
+
+	"bootimus/internal/metrics"
 
 	"github.com/insomniacslk/dhcp/dhcpv4"
 	"github.com/insomniacslk/dhcp/iana"
@@ -24,11 +28,11 @@ type Config struct {
 }
 
 type Server struct {
-	cfg    Config
-	conn   *net.UDPConn
-	sender *net.UDPConn
-	wg     sync.WaitGroup
-	done   chan struct{}
+	cfg      Config
+	conn     *net.UDPConn
+	conn4011 *net.UDPConn
+	wg       sync.WaitGroup
+	done     chan struct{}
 }
 
 func NewServer(cfg Config) (*Server, error) {
@@ -56,22 +60,27 @@ func (s *Server) Start() error {
 	if err != nil {
 		return fmt.Errorf("listen UDP/67: %w (needs root or CAP_NET_BIND_SERVICE)", err)
 	}
+	// SO_BROADCAST lets us reply from source port 67 directly, which many PXE
+	// ROMs require — they drop DHCP replies that don't come from port 67.
+	if err := enableBroadcast(conn); err != nil {
+		conn.Close()
+		return fmt.Errorf("enable broadcast on UDP/67: %w", err)
+	}
 	s.conn = conn
 
-	// Separate socket for replies so SO_BROADCAST is set and the source port
-	// isn't tied to the listener.
-	sender, err := net.DialUDP("udp4", nil, &net.UDPAddr{IP: net.IPv4bcast, Port: 68})
+	conn4011, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero, Port: 4011})
 	if err != nil {
 		conn.Close()
-		return fmt.Errorf("dial broadcast: %w", err)
+		return fmt.Errorf("listen UDP/4011: %w", err)
 	}
-	s.sender = sender
+	s.conn4011 = conn4011
 
-	log.Printf("proxyDHCP: listening on UDP/67, advertising next-server=%s (BIOS=%s, UEFI=%s, ARM64=%s)",
+	log.Printf("proxyDHCP: listening on UDP/67 + UDP/4011, advertising next-server=%s (BIOS=%s, UEFI=%s, ARM64=%s)",
 		s.cfg.ServerIP, s.cfg.BootfileBIOS, s.cfg.BootfileUEFI, s.cfg.BootfileARM64)
 
-	s.wg.Add(1)
-	go s.loop()
+	s.wg.Add(2)
+	go s.loop(conn, true)
+	go s.loop(conn4011, false)
 	return nil
 }
 
@@ -80,14 +89,14 @@ func (s *Server) Shutdown() error {
 	if s.conn != nil {
 		s.conn.Close()
 	}
-	if s.sender != nil {
-		s.sender.Close()
+	if s.conn4011 != nil {
+		s.conn4011.Close()
 	}
 	s.wg.Wait()
 	return nil
 }
 
-func (s *Server) loop() {
+func (s *Server) loop(conn *net.UDPConn, bootp bool) {
 	defer s.wg.Done()
 	buf := make([]byte, 1500)
 	for {
@@ -96,7 +105,7 @@ func (s *Server) loop() {
 			return
 		default:
 		}
-		n, _, err := s.conn.ReadFromUDP(buf)
+		n, src, err := conn.ReadFromUDP(buf)
 		if err != nil {
 			select {
 			case <-s.done:
@@ -111,11 +120,11 @@ func (s *Server) loop() {
 			log.Printf("proxyDHCP: parse error: %v", err)
 			continue
 		}
-		s.handle(req)
+		s.handle(conn, src, req, bootp)
 	}
 }
 
-func (s *Server) handle(req *dhcpv4.DHCPv4) {
+func (s *Server) handle(conn *net.UDPConn, src *net.UDPAddr, req *dhcpv4.DHCPv4, bootp bool) {
 	vci := req.ClassIdentifier()
 	if len(vci) < 9 || vci[:9] != "PXEClient" {
 		return
@@ -139,6 +148,7 @@ func (s *Server) handle(req *dhcpv4.DHCPv4) {
 		dhcpv4.WithOption(dhcpv4.OptClassIdentifier("PXEClient")),
 		dhcpv4.WithOption(dhcpv4.OptTFTPServerName(s.cfg.ServerIP.String())),
 		dhcpv4.WithOption(dhcpv4.OptBootFileName(bootfile)),
+		dhcpv4.WithOption(dhcpv4.OptGeneric(dhcpv4.OptionVendorSpecificInformation, pxeVendorOptions())),
 	)
 	if err != nil {
 		log.Printf("proxyDHCP: build reply: %v", err)
@@ -152,12 +162,44 @@ func (s *Server) handle(req *dhcpv4.DHCPv4) {
 	// Older PXE ROMs read the bootp `file` header, not option 67.
 	resp.BootFileName = bootfile
 
-	if _, err := s.sender.Write(resp.ToBytes()); err != nil {
+	dst := &net.UDPAddr{IP: net.IPv4bcast, Port: 68}
+	if !bootp {
+		// PXE boot-server REQUEST on 4011: reply unicast to the client source.
+		dst = src
+	}
+
+	if _, err := conn.WriteToUDP(resp.ToBytes(), dst); err != nil {
 		log.Printf("proxyDHCP: send reply: %v", err)
 		return
 	}
+	metrics.ProxyDHCPOffers.WithLabelValues(strconv.Itoa(int(clientArch(req)))).Inc()
 	log.Printf("proxyDHCP: %s -> %s arch=%d bootfile=%s",
 		req.MessageType(), req.ClientHWAddr, clientArch(req), bootfile)
+}
+
+// pxeVendorOptions builds the DHCP option 43 (vendor-specific) payload for
+// PXE. Sub-option 6 (PXE_DISCOVERY_CONTROL) with bit 3 set tells the client
+// to use the BootFileName directly and skip boot-server discovery, which is
+// what AMI/Supermicro UEFI PXE ROMs expect before they'll TFTP the bootfile.
+func pxeVendorOptions() []byte {
+	return []byte{
+		0x06, 0x01, 0x08, // PXE_DISCOVERY_CONTROL = USE_BOOT_FILE
+		0xff, // end
+	}
+}
+
+func enableBroadcast(conn *net.UDPConn) error {
+	raw, err := conn.SyscallConn()
+	if err != nil {
+		return err
+	}
+	var setErr error
+	if err := raw.Control(func(fd uintptr) {
+		setErr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_BROADCAST, 1)
+	}); err != nil {
+		return err
+	}
+	return setErr
 }
 
 func (s *Server) bootfileFor(req *dhcpv4.DHCPv4) string {
