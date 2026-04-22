@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bootimus Admin Panel</title>
+    <title>Bootimus 管理面板</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <style>
         :root {
@@ -522,47 +522,47 @@
         <div style="width: 100%; max-width: 380px; padding: 24px;">
             <div style="text-align: center; margin-bottom: 32px;">
                 <h1 style="font-size: 28px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">🚀 Bootimus</h1>
-                <p style="color: var(--text-secondary); font-size: 14px;">PXE/HTTP Boot Server</p>
+                <p style="color: var(--text-secondary); font-size: 14px;">PXE/HTTP 启动服务器</p>
             </div>
             <form id="login-form" style="background: var(--bg-secondary); padding: 28px; border-radius: var(--radius); box-shadow: var(--shadow);">
                 <div id="login-auth-selector" style="display: none; margin-bottom: 16px;">
-                    <label style="display: block; margin-bottom: 6px; font-size: 13px; font-weight: 500; color: var(--text-secondary);">Authentication</label>
+                    <label style="display: block; margin-bottom: 6px; font-size: 13px; font-weight: 500; color: var(--text-secondary);">认证方式</label>
                     <select id="login-auth-method" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-input); color: var(--text-primary); font-size: 14px;">
                     </select>
                 </div>
                 <div class="form-group" style="margin-bottom: 16px;">
-                    <label style="display: block; margin-bottom: 6px; font-size: 13px; font-weight: 500; color: var(--text-secondary);">Username</label>
+                    <label style="display: block; margin-bottom: 6px; font-size: 13px; font-weight: 500; color: var(--text-secondary);">用户名</label>
                     <input type="text" name="username" id="login-username" required autocomplete="username" autofocus
                         style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-input); color: var(--text-primary); font-size: 14px;">
                 </div>
                 <div class="form-group" style="margin-bottom: 20px;">
-                    <label style="display: block; margin-bottom: 6px; font-size: 13px; font-weight: 500; color: var(--text-secondary);">Password</label>
+                    <label style="display: block; margin-bottom: 6px; font-size: 13px; font-weight: 500; color: var(--text-secondary);">密码</label>
                     <input type="password" name="password" id="login-password" required autocomplete="current-password"
                         style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-input); color: var(--text-primary); font-size: 14px;">
                 </div>
                 <div id="login-error" style="display: none; color: var(--danger); font-size: 13px; margin-bottom: 12px;"></div>
-                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 10px; font-size: 14px; font-weight: 600;">Sign In</button>
+                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 10px; font-size: 14px; font-weight: 600;">登录</button>
             </form>
         </div>
     </div>
 
     <header id="main-header" style="display: none;">
         <div class="header-content">
-            <h1>🚀 Bootimus Admin Panel</h1>
-            <p>PXE/HTTP Boot Server Management Interface</p>
+            <h1>🚀 Bootimus 管理面板</h1>
+            <p>PXE/HTTP 启动服务器管理界面</p>
         </div>
         <div style="display: flex; align-items: center; gap: 10px;">
-            <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme" id="theme-toggle-btn">☀️</button>
+            <button class="theme-toggle" onclick="toggleTheme()" title="切换主题" id="theme-toggle-btn">☀️</button>
             <div class="user-profile">
                 <button class="user-profile-button" onclick="toggleUserProfile()">👤</button>
                 <div class="user-profile-dropdown" id="user-profile-dropdown">
                     <div class="user-profile-info">
-                        <div class="username" id="current-username">Loading...</div>
-                        <div class="role" id="current-user-role">User</div>
+                        <div class="username" id="current-username">加载中...</div>
+                        <div class="role" id="current-user-role">用户</div>
                     </div>
                     <button onclick="logout()">
                         <span>🚪</span>
-                        <span>Logout</span>
+                        <span>退出登录</span>
                     </button>
                 </div>
             </div>
@@ -574,29 +574,29 @@
         <aside class="sidebar">
             <nav class="sidebar-nav">
                 <div class="nav-group">
-                    <span class="nav-group-label">Overview</span>
-                    <button class="nav-item active" data-tab="server"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> Server Info</button>
+                    <span class="nav-group-label">概览</span>
+                    <button class="nav-item active" data-tab="server"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> 服务器信息</button>
                 </div>
                 <div class="nav-group">
-                    <span class="nav-group-label">Management</span>
-                    <button class="nav-item" data-tab="images"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg> Images</button>
-                    <button class="nav-item" data-tab="public-files"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Public Files</button>
+                    <span class="nav-group-label">管理</span>
+                    <button class="nav-item" data-tab="images"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg> 镜像</button>
+                    <button class="nav-item" data-tab="public-files"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> 公共文件</button>
                 </div>
                 <div class="nav-group">
-                    <span class="nav-group-label">Boot</span>
-                    <button class="nav-item" data-tab="bootloaders"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg> Bootloaders</button>
-                    <button class="nav-item" data-tab="tools"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg> Tools</button>
-                    <button class="nav-item" data-tab="profiles"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg> Distro Profiles</button>
+                    <span class="nav-group-label">启动</span>
+                    <button class="nav-item" data-tab="bootloaders"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg> 引导加载程序</button>
+                    <button class="nav-item" data-tab="tools"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg> 工具</button>
+                    <button class="nav-item" data-tab="profiles"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg> 发行版配置</button>
                 </div>
                 <div class="nav-group">
-                    <span class="nav-group-label">Access</span>
-                    <button class="nav-item" data-tab="clients"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg> Clients</button>
-                    <button class="nav-item" data-tab="users"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Users</button>
+                    <span class="nav-group-label">访问</span>
+                    <button class="nav-item" data-tab="clients"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg> 客户端</button>
+                    <button class="nav-item" data-tab="users"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> 用户</button>
                 </div>
                 <div class="nav-group">
-                    <span class="nav-group-label">System</span>
-                    <button class="nav-item" data-tab="settings"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Settings</button>
-                    <button class="nav-item" data-tab="logs"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg> Logs</button>
+                    <span class="nav-group-label">系统</span>
+                    <button class="nav-item" data-tab="settings"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> 设置</button>
+                    <button class="nav-item" data-tab="logs"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg> 日志</button>
                 </div>
             </nav>
             <div style="padding: 12px 16px; border-top: 1px solid var(--border); flex-shrink: 0;">
@@ -613,52 +613,52 @@
                 <div id="stats-container" class="stats">
                     <div class="stat-card">
                         <div class="stat-value" id="stat-clients">-</div>
-                        <div class="stat-label">Total Clients</div>
+                        <div class="stat-label">客户端总数</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-value" id="stat-active-clients">-</div>
-                        <div class="stat-label">Active Clients</div>
+                        <div class="stat-label">活跃客户端</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-value" id="stat-images">-</div>
-                        <div class="stat-label">Total Images</div>
+                        <div class="stat-label">镜像总数</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-value" id="stat-enabled-images">-</div>
-                        <div class="stat-label">Enabled Images</div>
+                        <div class="stat-label">已启用镜像</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-value" id="stat-boots">-</div>
-                        <div class="stat-label">Total Boots</div>
+                        <div class="stat-label">启动总数</div>
                     </div>
                 </div>
 
                 <!-- Active Sessions Panel -->
                 <div id="active-sessions-panel" class="card" style="display: none;">
-                    <h2>Active Sessions</h2>
+                    <h2>活动会话</h2>
                     <div id="active-sessions-content"></div>
                 </div>
 
                 <!-- Hidden tabs for backwards compat -->
                 <div class="tabs">
-                    <button class="tab active" data-tab="server">Server Info</button>
-                    <button class="tab" data-tab="clients">Clients</button>
-                    <button class="tab" data-tab="images">Images</button>
-                    <button class="tab" data-tab="public-files">Public Files</button>
-                    <button class="tab" data-tab="users">Users</button>
-                    <button class="tab" data-tab="tools">Tools</button>
-                    <button class="tab" data-tab="bootloaders">Bootloaders</button>
-                    <button class="tab" data-tab="settings">Settings</button>
-                    <button class="tab" data-tab="logs">Logs</button>
+                    <button class="tab active" data-tab="server">服务器信息</button>
+                    <button class="tab" data-tab="clients">客户端</button>
+                    <button class="tab" data-tab="images">镜像</button>
+                    <button class="tab" data-tab="public-files">公共文件</button>
+                    <button class="tab" data-tab="users">用户</button>
+                    <button class="tab" data-tab="tools">工具</button>
+                    <button class="tab" data-tab="bootloaders">引导加载程序</button>
+                    <button class="tab" data-tab="settings">设置</button>
+                    <button class="tab" data-tab="logs">日志</button>
                 </div>
 
         <!-- Server Info Tab -->
         <div id="server-tab" class="tab-content active">
             <div class="card">
-                <h2>Server Information</h2>
+                <h2>服务器信息</h2>
                 <div id="server-info" class="loading">
                     <div class="spinner"></div>
-                    Loading server info...
+                    加载服务器信息...
                 </div>
             </div>
         </div>
@@ -667,41 +667,41 @@
         <div id="clients-tab" class="tab-content">
             <div class="card">
                 <div class="subtabs">
-                    <button class="subtab active" data-subtab="clients" onclick="switchClientsSubtab('clients')">Clients</button>
-                    <button class="subtab" data-subtab="client-groups" onclick="switchClientsSubtab('client-groups')">Client Groups</button>
+                    <button class="subtab active" data-subtab="clients" onclick="switchClientsSubtab('clients')">客户端</button>
+                    <button class="subtab" data-subtab="client-groups" onclick="switchClientsSubtab('client-groups')">客户端组</button>
                 </div>
 
                 <div id="clients-subtab">
-                    <h2>Client Management</h2>
+                    <h2>客户端管理</h2>
                     <p style="color: var(--text-secondary); margin: 0 12px 8px; font-size: 13px;">
-                        Manage PXE boot clients. Discovered clients appear automatically when they connect.
+                        管理 PXE 启动客户端。发现的客户端会在连接时自动显示。
                     </p>
                     <div class="toolbar">
-                        <button class="btn btn-primary" onclick="showAddClientModal()">+ Add Client</button>
-                        <button class="btn btn-sm" onclick="loadClients()">Refresh</button>
-                        <button class="btn btn-sm btn-success" id="clients-autorefresh-btn" onclick="toggleClientsAutoRefresh()">Auto-Refresh: Off</button>
-                        <button class="btn btn-sm" onclick="exportClientsCSV()">Export CSV</button>
-                        <button class="btn btn-sm" onclick="showImportClientsModal()">Import CSV</button>
-                        <input type="search" class="toolbar-filter" placeholder="Filter clients…" oninput="applyTableFilter('clients', this.value, renderClientsTable)">
+                        <button class="btn btn-primary" onclick="showAddClientModal()">+ 添加客户端</button>
+                        <button class="btn btn-sm" onclick="loadClients()">刷新</button>
+                        <button class="btn btn-sm btn-success" id="clients-autorefresh-btn" onclick="toggleClientsAutoRefresh()">自动刷新: 关闭</button>
+                        <button class="btn btn-sm" onclick="exportClientsCSV()">导出 CSV</button>
+                        <button class="btn btn-sm" onclick="showImportClientsModal()">导入 CSV</button>
+                        <input type="search" class="toolbar-filter" placeholder="筛选客户端…" oninput="applyTableFilter('clients', this.value, renderClientsTable)">
                     </div>
                     <div id="clients-table" class="loading">
                         <div class="spinner"></div>
-                        Loading clients...
+                        加载客户端...
                     </div>
                 </div>
 
                 <div id="client-groups-subtab" style="display: none;">
-                    <h2>Client Groups</h2>
+                    <h2>客户端组</h2>
                     <p style="color: var(--text-secondary); margin: 0 12px 8px; font-size: 13px;">
-                        Group clients by location, role, or fleet. Bulk wake all members, set a next-boot image on all, and overlay assigned images.
+                        按位置、角色或机群对客户端进行分组。批量唤醒所有成员、设置下次启动镜像,并叠加分配的镜像。
                     </p>
                     <div class="toolbar">
-                        <button class="btn btn-primary" onclick="showAddClientGroupModal()">+ Add Client Group</button>
-                        <input type="search" class="toolbar-filter" placeholder="Filter groups…" oninput="applyTableFilter('client-groups', this.value, renderClientGroupsTable)">
+                        <button class="btn btn-primary" onclick="showAddClientGroupModal()">+ 添加客户端组</button>
+                        <input type="search" class="toolbar-filter" placeholder="筛选组…" oninput="applyTableFilter('client-groups', this.value, renderClientGroupsTable)">
                     </div>
                     <div id="client-groups-table" class="loading">
                         <div class="spinner"></div>
-                        Loading client groups...
+                        加载客户端组...
                     </div>
                 </div>
             </div>
@@ -711,39 +711,39 @@
         <div id="images-tab" class="tab-content">
             <div class="card">
                 <div class="subtabs">
-                    <button class="subtab active" data-subtab="images" onclick="switchImagesSubtab('images')">Images</button>
-                    <button class="subtab" data-subtab="image-groups" onclick="switchImagesSubtab('image-groups')">Image Groups</button>
+                    <button class="subtab active" data-subtab="images" onclick="switchImagesSubtab('images')">镜像</button>
+                    <button class="subtab" data-subtab="image-groups" onclick="switchImagesSubtab('image-groups')">镜像组</button>
                 </div>
 
                 <div id="images-subtab">
-                    <h2>Image Management</h2>
+                    <h2>镜像管理</h2>
                     <p style="color: var(--text-secondary); margin: 0 12px 8px; font-size: 13px;">
-                        Upload, download, and manage OS images available for PXE booting.
+                        上传、下载和管理可用于 PXE 启动的操作系统镜像。
                     </p>
                     <div class="toolbar">
-                        <button class="btn btn-primary" onclick="showUploadModal()">📤 Upload ISO</button>
-                        <button class="btn btn-primary" onclick="showDownloadModal()">⬇️ Download ISO</button>
-                        <button class="btn btn-success" onclick="scanImages()">🔍 Scan for ISOs</button>
-                        <input type="search" class="toolbar-filter" placeholder="Filter images…" oninput="applyTableFilter('images', this.value, renderImagesTable)">
+                        <button class="btn btn-primary" onclick="showUploadModal()">📤 上传 ISO</button>
+                        <button class="btn btn-primary" onclick="showDownloadModal()">⬇️ 下载 ISO</button>
+                        <button class="btn btn-success" onclick="scanImages()">🔍 扫描 ISO</button>
+                        <input type="search" class="toolbar-filter" placeholder="筛选镜像…" oninput="applyTableFilter('images', this.value, renderImagesTable)">
                     </div>
                     <div id="images-table" class="loading">
                         <div class="spinner"></div>
-                        Loading images...
+                        加载镜像...
                     </div>
                 </div>
 
                 <div id="image-groups-subtab" style="display: none;">
-                    <h2>Image Groups</h2>
+                    <h2>镜像组</h2>
                     <p style="color: var(--text-secondary); margin: 0 12px 8px; font-size: 13px;">
-                        Organise images into groups and subgroups for the PXE boot menu.
+                        将镜像组织成组和子组以用于 PXE 启动菜单。
                     </p>
                     <div class="toolbar">
-                        <button class="btn btn-primary" onclick="showAddGroupModal()">+ Add Image Group</button>
-                        <input type="search" class="toolbar-filter" placeholder="Filter groups…" oninput="applyTableFilter('image-groups', this.value, renderGroupsTable)">
+                        <button class="btn btn-primary" onclick="showAddGroupModal()">+ 添加镜像组</button>
+                        <input type="search" class="toolbar-filter" placeholder="筛选组…" oninput="applyTableFilter('image-groups', this.value, renderGroupsTable)">
                     </div>
                     <div id="groups-table" class="loading">
                         <div class="spinner"></div>
-                        Loading groups...
+                        加载组...
                     </div>
                 </div>
             </div>
@@ -752,16 +752,16 @@
         <!-- Public Files Tab -->
         <div id="public-files-tab" class="tab-content">
             <div class="card">
-                <h2>Public Files</h2>
+                <h2>公共文件</h2>
                 <p style="color: var(--text-secondary); margin: 0 12px 8px; font-size: 13px;">
-                    Files available to all clients. For image-specific files, manage them from the Images tab.
+                    所有客户端可用的文件。对于特定于镜像的文件,请从镜像选项卡进行管理。
                 </p>
                 <div class="toolbar">
-                    <button class="btn btn-primary" onclick="showUploadPublicFileModal()">+ Upload Public File</button>
+                    <button class="btn btn-primary" onclick="showUploadPublicFileModal()">+ 上传公共文件</button>
                 </div>
                 <div id="public-files-table" class="loading">
                     <div class="spinner"></div>
-                    <p>Loading files...</p>
+                    <p>加载文件...</p>
                 </div>
             </div>
         </div>
@@ -769,17 +769,17 @@
         <!-- Users Tab -->
         <div id="users-tab" class="tab-content">
             <div class="card">
-                <h2>User Management</h2>
+                <h2>用户管理</h2>
                 <p style="color: var(--text-secondary); margin: 0 12px 8px; font-size: 13px;">
-                    Manage admin panel user accounts and permissions.
+                    管理管理面板用户账户和权限。
                 </p>
                 <div class="toolbar">
-                    <button class="btn btn-primary" onclick="showAddUserModal()">+ Add User</button>
-                    <input type="search" class="toolbar-filter" placeholder="Filter users…" oninput="applyTableFilter('users', this.value, renderUsersTable)">
+                    <button class="btn btn-primary" onclick="showAddUserModal()">+ 添加用户</button>
+                    <input type="search" class="toolbar-filter" placeholder="筛选用户…" oninput="applyTableFilter('users', this.value, renderUsersTable)">
                 </div>
                 <div id="users-table" class="loading">
                     <div class="spinner"></div>
-                    Loading users...
+                    加载用户...
                 </div>
             </div>
         </div>
@@ -787,16 +787,16 @@
         <!-- Tools Tab -->
         <div id="tools-tab" class="tab-content">
             <div class="card">
-                <h2>Boot Tools</h2>
+                <h2>启动工具</h2>
                 <p style="color: var(--text-secondary); margin: 0 12px 8px; font-size: 13px;">
-                    Download a tool to make it available, then enable it to show in the boot menu.
+                    下载工具使其可用,然后启用它以在启动菜单中显示。
                 </p>
                 <div class="toolbar">
-                    <button class="btn btn-primary" onclick="showModal('add-custom-tool-modal')">+ Add Custom Tool</button>
+                    <button class="btn btn-primary" onclick="showModal('add-custom-tool-modal')">+ 添加自定义工具</button>
                 </div>
                 <div id="tools-list" class="loading">
                     <div class="spinner"></div>
-                    Loading tools...
+                    加载工具...
                 </div>
             </div>
         </div>
@@ -804,17 +804,17 @@
         <!-- Distro Profiles Tab -->
         <div id="profiles-tab" class="tab-content">
             <div class="card">
-                <h2>Distro Profiles</h2>
+                <h2>发行版配置</h2>
                 <p style="color: var(--text-secondary); margin: 0 12px 8px; font-size: 13px;">
-                    Distro profiles define how ISOs are detected and booted. Built-in profiles are updated from the central repository. Custom profiles take priority.
+                    发行版配置定义了如何检测和启动 ISO。内置配置从中央存储库更新。自定义配置优先。
                 </p>
                 <div class="toolbar">
-                    <button class="btn btn-primary" onclick="showModal('add-profile-modal')">+ Add Custom Profile</button>
-                    <button class="btn btn-success" onclick="updateProfilesFromRemote()">Check for Updates</button>
+                    <button class="btn btn-primary" onclick="showModal('add-profile-modal')">+ 添加自定义配置</button>
+                    <button class="btn btn-success" onclick="updateProfilesFromRemote()">检查更新</button>
                 </div>
                 <div id="profiles-list" class="loading" style="padding: 0 12px 12px;">
                     <div class="spinner"></div>
-                    Loading profiles...
+                    加载配置...
                 </div>
             </div>
         </div>
@@ -822,16 +822,16 @@
         <!-- Bootloaders Tab -->
         <div id="bootloaders-tab" class="tab-content">
             <div class="card">
-                <h2>Bootloader Management</h2>
+                <h2>引导加载程序管理</h2>
                 <p style="color: var(--text-secondary); margin: 0 12px 8px; font-size: 13px;">
-                    Manage iPXE bootloader sets served to PXE clients. Create custom sets with your own bootloader files.
+                    管理提供给 PXE 客户端的 iPXE 引导加载程序集。使用您自己的引导加载程序文件创建自定义集。
                 </p>
                 <div class="toolbar">
-                    <button class="btn btn-primary" onclick="showCreateBootloaderSetModal()">+ Create Set</button>
+                    <button class="btn btn-primary" onclick="showCreateBootloaderSetModal()">+ 创建集</button>
                 </div>
                 <div id="bootloaders-table" class="loading">
                     <div class="spinner"></div>
-                    Loading bootloaders...
+                    加载引导加载程序...
                 </div>
             </div>
         </div>
@@ -839,86 +839,86 @@
         <!-- Settings Tab -->
         <div id="settings-tab" class="tab-content">
             <div class="card">
-                <h2>Boot Menu Theme</h2>
+                <h2>启动菜单主题</h2>
                 <p style="color: var(--text-secondary); margin-bottom: 20px;">
-                    Customise the appearance of the PXE boot menu seen by clients.
-                    Console resolution may not be supported by all iPXE firmware builds.
+                    自定义客户端看到的 PXE 启动菜单外观。
+                    并非所有 iPXE 固件版本都支持控制台分辨率。
                 </p>
                 <form id="theme-form">
                     <div class="form-group">
-                        <label>Menu Title</label>
-                        <input type="text" id="theme-title" placeholder="Bootimus - Boot Menu">
+                        <label>菜单标题</label>
+                        <input type="text" id="theme-title" placeholder="Bootimus - 启动菜单">
                     </div>
                     <div class="form-group">
-                        <label>Menu Timeout (seconds)</label>
+                        <label>菜单超时(秒)</label>
                         <input type="number" id="theme-timeout" min="0" value="30" placeholder="30">
-                        <small style="color: var(--text-secondary);">Time before auto-booting the default entry. Set to 0 to disable (wait forever).</small>
+                        <small style="color: var(--text-secondary);">自动启动默认条目前的等待时间。设置为 0 以禁用(永久等待)。</small>
                     </div>
                     <div style="display: flex; gap: 10px; margin-top: 10px;">
-                        <button type="submit" class="btn btn-primary">Save Theme</button>
+                        <button type="submit" class="btn btn-primary">保存主题</button>
                     </div>
                 </form>
             </div>
             <div class="card" style="margin-top: 20px;">
                 <h2>Webhook</h2>
                 <p style="color: var(--text-secondary); margin: 0 12px 16px; font-size: 13px;">
-                    POST a JSON payload to a URL when PXE events happen. Fire-and-forget, 10s timeout, no retries.
+                    当 PXE 事件发生时,将 JSON 负载 POST 到 URL。发送后不管,10秒超时,不重试。
                 </p>
                 <form id="webhook-form" style="padding: 0 12px 12px;">
                     <div class="form-group checkbox-group">
                         <input type="checkbox" id="webhook-enabled">
-                        <label for="webhook-enabled">Enable outbound webhook</label>
+                        <label for="webhook-enabled">启用出站 webhook</label>
                     </div>
                     <div class="form-group">
                         <label>Webhook URL</label>
                         <input type="url" id="webhook-url" placeholder="https://example.com/bootimus-hook">
                     </div>
                     <div class="form-group">
-                        <label>Events</label>
+                        <label>事件</label>
                         <div class="form-group checkbox-group" style="margin: 4px 0;">
                             <input type="checkbox" id="webhook-on-boot-started">
-                            <label for="webhook-on-boot-started"><code>boot.started</code> — a client began booting an image</label>
+                            <label for="webhook-on-boot-started"><code>boot.started</code> — 客户端开始启动镜像</label>
                         </div>
                         <div class="form-group checkbox-group" style="margin: 4px 0;">
                             <input type="checkbox" id="webhook-on-client-discovered">
-                            <label for="webhook-on-client-discovered"><code>client.discovered</code> — a new MAC connected for the first time</label>
+                            <label for="webhook-on-client-discovered"><code>client.discovered</code> — 新 MAC 首次连接</label>
                         </div>
                         <div class="form-group checkbox-group" style="margin: 4px 0;">
                             <input type="checkbox" id="webhook-on-inventory-updated">
-                            <label for="webhook-on-inventory-updated"><code>client.inventory_updated</code> — hardware info refreshed for an existing client</label>
+                            <label for="webhook-on-inventory-updated"><code>client.inventory_updated</code> — 现有客户端的硬件信息已刷新</label>
                         </div>
                     </div>
                     <div style="display: flex; gap: 8px;">
-                        <button type="submit" class="btn btn-primary">Save Webhook</button>
-                        <button type="button" class="btn" onclick="testWebhook()">Send Test</button>
+                        <button type="submit" class="btn btn-primary">保存 Webhook</button>
+                        <button type="button" class="btn" onclick="testWebhook()">发送测试</button>
                         <span id="webhook-test-result" style="align-self: center; font-size: 13px;"></span>
                     </div>
                 </form>
             </div>
 
             <div class="card" style="margin-top: 20px;">
-                <h2>Backup</h2>
+                <h2>备份</h2>
                 <p style="color: var(--text-secondary); margin-bottom: 16px;">
-                    Download a <code>.tar.gz</code> of the bootimus data directory: database, bootloader configuration, custom bootloader sets, and settings. ISOs and downloaded tool binaries are excluded (they're reproducible).
+                    下载 bootimus 数据目录的 <code>.tar.gz</code> 备份:数据库、引导加载程序配置、自定义引导加载程序集和设置。不包括 ISO 和下载的工具二进制文件(它们可以重新生成)。
                 </p>
                 <div style="display: flex; gap: 10px; padding: 0 12px 12px;">
-                    <button class="btn btn-primary" onclick="downloadBackup()">⬇ Download Backup</button>
+                    <button class="btn btn-primary" onclick="downloadBackup()">⬇ 下载备份</button>
                 </div>
                 <p style="color: var(--text-muted); font-size: 12px; padding: 0 12px 12px; margin: 0;">
-                    Restore is manual: stop bootimus, extract the tarball over the data directory, start bootimus.
+                    恢复是手动的:停止 bootimus,将 tarball 解压到数据目录上,启动 bootimus。
                 </p>
             </div>
 
             <div class="card" style="margin-top: 20px;">
-                <h2>USB Boot Images</h2>
+                <h2>USB 启动镜像</h2>
                 <p style="color: var(--text-secondary); margin-bottom: 20px;">
-                    Download bootable USB images for machines that don't support PXE network booting.
-                    Write to a USB stick and boot from it to access the bootimus menu.
+                    为不支持 PXE 网络启动的机器下载可启动的 USB 镜像。
+                    写入 U 盘并从中启动以访问 bootimus 菜单。
                 </p>
                 <div id="usb-images-content" style="padding: 0 12px 12px;">
                     <div class="loading">
                         <div class="spinner"></div>
-                        Loading...
+                        加载中...
                     </div>
                 </div>
             </div>
@@ -927,29 +927,29 @@
         <!-- Logs Tab -->
         <div id="logs-tab" class="tab-content">
             <div class="card">
-                <h2>Server Logs</h2>
+                <h2>服务器日志</h2>
                 <p style="color: var(--text-secondary); margin: 0 12px 8px; font-size: 13px;">
-                    Live server log output for TFTP, HTTP, and PXE boot activity.
+                    TFTP、HTTP 和 PXE 启动活动的实时服务器日志输出。
                 </p>
                 <div class="toolbar">
-                    <button class="btn btn-sm btn-success" id="connect-logs-btn" onclick="connectLiveLogs()">Start Auto-Refresh</button>
-                    <button class="btn btn-sm btn-danger" id="disconnect-logs-btn" onclick="disconnectLiveLogs()" style="display: none;">Stop Auto-Refresh</button>
-                    <button class="btn btn-sm" onclick="loadServerLogs()">Refresh Now</button>
-                    <button class="btn btn-sm" onclick="clearLiveLogs()">Clear</button>
+                    <button class="btn btn-sm btn-success" id="connect-logs-btn" onclick="connectLiveLogs()">开始自动刷新</button>
+                    <button class="btn btn-sm btn-danger" id="disconnect-logs-btn" onclick="disconnectLiveLogs()" style="display: none;">停止自动刷新</button>
+                    <button class="btn btn-sm" onclick="loadServerLogs()">立即刷新</button>
+                    <button class="btn btn-sm" onclick="clearLiveLogs()">清除</button>
                     <span id="log-status" style="color: var(--text-secondary); font-size: 12px;"></span>
                 </div>
                 <div id="live-logs" style="background: #1a1a1a; padding: 16px; border-radius: var(--radius-sm); max-height: 500px; overflow-y: auto; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.6; color: #e0e0e0; margin: 0 12px 12px;">
-                    <div style="color: var(--text-secondary);">Click "Refresh Now" to load server logs...</div>
+                    <div style="color: var(--text-secondary);">点击"立即刷新"加载服务器日志...</div>
                 </div>
             </div>
             <div class="card">
-                <h2>Boot Attempt History</h2>
+                <h2>启动尝试历史</h2>
                 <p style="color: var(--text-secondary); margin: 0 12px 8px; font-size: 13px;">
-                    Record of all PXE boot attempts by clients.
+                    所有客户端 PXE 启动尝试的记录。
                 </p>
                 <div id="logs-table" class="loading" style="padding: 0 12px 12px;">
                     <div class="spinner"></div>
-                    Loading logs...
+                    加载日志...
                 </div>
             </div>
             </div>
@@ -960,16 +960,16 @@
     <div id="create-bootloader-set-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Create Bootloader Set</h2>
+                <h2>创建引导加载程序集</h2>
             </div>
             <form id="create-bootloader-set-form" onsubmit="createBootloaderSet(event)">
                 <div class="form-group">
-                    <label>Set Name *</label>
-                    <input type="text" id="bootloader-set-name" placeholder="e.g. ipxe-1.21.1" required>
-                    <small style="color: var(--text-secondary);">Creates a directory in <code>data/bootloaders/</code>. Use a descriptive name.</small>
+                    <label>集名称 *</label>
+                    <input type="text" id="bootloader-set-name" placeholder="例如: ipxe-1.21.1" required>
+                    <small style="color: var(--text-secondary);">在 <code>data/bootloaders/</code> 中创建目录。请使用描述性名称。</small>
                 </div>
-                <button type="submit" class="btn btn-primary">Create Set</button>
-                <button type="button" class="btn" onclick="closeModal('create-bootloader-set-modal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">创建集</button>
+                <button type="button" class="btn" onclick="closeModal('create-bootloader-set-modal')">取消</button>
             </form>
         </div>
     </div>
@@ -977,17 +977,17 @@
     <div id="upload-bootloader-files-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Upload Files to <span id="upload-bl-set-name"></span></h2>
+                <h2>上传文件到 <span id="upload-bl-set-name"></span></h2>
             </div>
             <form id="upload-bootloader-files-form" onsubmit="uploadBootloaderFiles(event)">
                 <input type="hidden" id="upload-bl-set-value">
                 <div class="form-group">
-                    <label>Bootloader Files *</label>
+                    <label>引导加载程序文件 *</label>
                     <input type="file" id="bootloader-files-upload" multiple required>
-                    <small style="color: var(--text-secondary);">Select one or more iPXE bootloader files (.efi, .kpxe, .usb, etc.).</small>
+                    <small style="color: var(--text-secondary);">选择一个或多个 iPXE 引导加载程序文件 (.efi, .kpxe, .usb 等)。</small>
                 </div>
-                <button type="submit" class="btn btn-primary">Upload</button>
-                <button type="button" class="btn" onclick="closeModal('upload-bootloader-files-modal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">上传</button>
+                <button type="button" class="btn" onclick="closeModal('upload-bootloader-files-modal')">取消</button>
             </form>
         </div>
     </div>
@@ -996,27 +996,27 @@
     <div id="add-client-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Add Client</h2>
+                <h2>添加客户端</h2>
             </div>
             <form id="add-client-form">
                 <div class="form-group">
-                    <label>MAC Address *</label>
+                    <label>MAC 地址 *</label>
                     <input type="text" name="mac_address" placeholder="00:11:22:33:44:55" required>
                 </div>
                 <div class="form-group">
-                    <label>Name</label>
-                    <input type="text" name="name" placeholder="Lab Machine 1">
+                    <label>名称</label>
+                    <input type="text" name="name" placeholder="实验室机器 1">
                 </div>
                 <div class="form-group">
-                    <label>Description</label>
-                    <textarea name="description" placeholder="Optional description" rows="3"></textarea>
+                    <label>描述</label>
+                    <textarea name="description" placeholder="可选描述" rows="3"></textarea>
                 </div>
                 <div class="form-group checkbox-group">
                     <input type="checkbox" name="enabled" checked>
-                    <label>Enabled</label>
+                    <label>已启用</label>
                 </div>
-                <button type="submit" class="btn btn-primary">Create Client</button>
-                <button type="button" class="btn" onclick="closeModal('add-client-modal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">创建客户端</button>
+                <button type="button" class="btn" onclick="closeModal('add-client-modal')">取消</button>
             </form>
         </div>
     </div>
@@ -1024,107 +1024,107 @@
     <div id="edit-client-modal" class="modal slide-panel">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Edit Client</h2>
+                <h2>编辑客户端</h2>
             </div>
             <form id="edit-client-form">
                 <div class="form-group">
-                    <label>MAC Address</label>
+                    <label>MAC 地址</label>
                     <input type="text" name="mac_address" readonly>
                 </div>
                 <div class="form-group">
-                    <label>Name</label>
+                    <label>名称</label>
                     <input type="text" name="name">
                 </div>
                 <div class="form-group">
-                    <label>Description</label>
+                    <label>描述</label>
                     <textarea name="description" rows="3"></textarea>
                 </div>
                 <div class="form-group checkbox-group">
                     <input type="checkbox" name="enabled">
-                    <label>Enabled</label>
+                    <label>已启用</label>
                 </div>
                 <div class="form-group checkbox-group">
                     <input type="checkbox" name="show_public_images">
-                    <label>Show public images</label>
+                    <label>显示公共镜像</label>
                 </div>
                 <div class="form-group">
-                    <label>Bootloader Set</label>
+                    <label>引导加载程序集</label>
                     <select name="bootloader_set" id="edit-bootloader-set-select">
-                        <option value="">Default (global setting)</option>
+                        <option value="">默认(全局设置)</option>
                     </select>
-                    <small style="color: var(--text-secondary);">Override the global bootloader set for this client.</small>
+                    <small style="color: var(--text-secondary);">覆盖此客户端的全局引导加载程序集。</small>
                 </div>
                 <div class="form-group">
-                    <label>Client Group</label>
+                    <label>客户端组</label>
                     <select name="client_group_id" id="edit-client-group-select">
-                        <option value="">(none)</option>
+                        <option value="">(无)</option>
                     </select>
-                    <small style="color: var(--text-secondary);">Group overlay: inherits allowed images and participates in bulk actions.</small>
+                    <small style="color: var(--text-secondary);">组叠加:继承允许的镜像并参与批量操作。</small>
                 </div>
 
                 <details style="margin-bottom: 12px;">
-                    <summary style="cursor: pointer; font-weight: 500; padding: 6px 0;">BMC / Redfish (Power Control)</summary>
+                    <summary style="cursor: pointer; font-weight: 500; padding: 6px 0;">BMC / Redfish(电源控制)</summary>
                     <p style="color: var(--text-muted); font-size: 12px; margin: 4px 0 10px 0;">
-                        Blank username/password/port inherit from the client group. Host is always per-client (each BMC has its own IP).
+                        空用户名/密码/端口从客户端组继承。主机始终是每客户端的(每个 BMC 有自己的 IP)。
                     </p>
                     <div class="form-group">
-                        <label>BMC Host / IP</label>
-                        <input type="text" name="ipmi_host" placeholder="e.g. 10.0.0.100">
+                        <label>BMC 主机/IP</label>
+                        <input type="text" name="ipmi_host" placeholder="例如: 10.0.0.100">
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                         <div class="form-group">
-                            <label>Port</label>
+                            <label>端口</label>
                             <input type="number" name="ipmi_port" min="1" max="65535" placeholder="443">
                         </div>
                         <div class="form-group checkbox-group" style="align-self: end; padding: 6px 0;">
                             <input type="checkbox" name="ipmi_insecure" id="edit-ipmi-insecure">
-                            <label for="edit-ipmi-insecure">Skip TLS verify</label>
+                            <label for="edit-ipmi-insecure">跳过 TLS 验证</label>
                         </div>
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                         <div class="form-group">
-                            <label>Username</label>
+                            <label>用户名</label>
                             <input type="text" name="ipmi_username" autocomplete="off">
                         </div>
                         <div class="form-group">
-                            <label>Password</label>
+                            <label>密码</label>
                             <input type="password" name="ipmi_password" autocomplete="off">
                         </div>
                     </div>
                     <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px;">
-                        <button type="button" class="btn btn-sm btn-success" onclick="powerClient('On')">Power On</button>
-                        <button type="button" class="btn btn-sm btn-danger" onclick="powerClient('ForceOff')">Force Off</button>
-                        <button type="button" class="btn btn-sm" onclick="powerClient('GracefulShutdown')">Graceful Off</button>
-                        <button type="button" class="btn btn-sm" onclick="powerClient('ForceRestart')">Restart</button>
-                        <button type="button" class="btn btn-sm" onclick="powerStatusClient()">Status</button>
+                        <button type="button" class="btn btn-sm btn-success" onclick="powerClient('On')">开机</button>
+                        <button type="button" class="btn btn-sm btn-danger" onclick="powerClient('ForceOff')">强制关机</button>
+                        <button type="button" class="btn btn-sm" onclick="powerClient('GracefulShutdown')">正常关机</button>
+                        <button type="button" class="btn btn-sm" onclick="powerClient('ForceRestart')">重启</button>
+                        <button type="button" class="btn btn-sm" onclick="powerStatusClient()">状态</button>
                     </div>
                     <div id="power-client-result" style="font-size: 12px; color: var(--text-secondary);"></div>
                 </details>
                 <div class="form-group">
-                    <label>Assigned Images</label>
+                    <label>分配的镜像</label>
                     <select name="images" multiple size="8" id="edit-images-select">
                     </select>
-                    <small style="color: var(--text-secondary);">Hold Ctrl/Cmd to select multiple. Public images are shown separately if enabled above.</small>
+                    <small style="color: var(--text-secondary);">按住 Ctrl/Cmd 选择多个。如果上面启用了公共镜像,将单独显示。</small>
                 </div>
                 <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border); display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                    <button type="button" class="btn btn-danger" onclick="deleteFromEditClient()">Delete</button>
+                    <button type="button" class="btn btn-danger" onclick="deleteFromEditClient()">删除</button>
                     <div style="flex: 1;"></div>
-                    <button type="button" class="btn" onclick="closeModal('edit-client-modal')">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Update Client</button>
+                    <button type="button" class="btn" onclick="closeModal('edit-client-modal')">取消</button>
+                    <button type="submit" class="btn btn-primary">更新客户端</button>
                 </div>
             </form>
             <div id="client-hardware-info" style="display:none; margin-top: 20px; border-top: 1px solid var(--border); padding-top: 16px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <h3 style="font-size: 14px; font-weight: 600; color: var(--text-primary);">Hardware Information</h3>
-                    <button type="button" class="btn btn-sm" onclick="showInventoryHistory()">View History</button>
+                    <h3 style="font-size: 14px; font-weight: 600; color: var(--text-primary);">硬件信息</h3>
+                    <button type="button" class="btn btn-sm" onclick="showInventoryHistory()">查看历史</button>
                 </div>
                 <div id="client-hw-details"></div>
             </div>
 
             <div id="client-boot-history" style="margin-top: 20px; border-top: 1px solid var(--border); padding-top: 16px;">
-                <h3 style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px;">Boot History</h3>
+                <h3 style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px;">启动历史</h3>
                 <div id="client-boot-history-list" style="font-size: 13px;">
-                    <p style="color: var(--text-secondary); margin: 0;">Loading…</p>
+                    <p style="color: var(--text-secondary); margin: 0;">加载中...</p>
                 </div>
             </div>
         </div>
@@ -1133,92 +1133,92 @@
     <div id="next-boot-modal" class="modal">
         <div class="modal-content" style="max-width: 480px;">
             <div class="modal-header">
-                <h2>Set Next Boot Action</h2>
+                <h2>设置下次启动操作</h2>
             </div>
-            <p style="color: var(--text-secondary); margin-bottom: 16px;">Select an image to boot on the next PXE boot. This is a one-time action that clears after use.</p>
+            <p style="color: var(--text-secondary); margin-bottom: 16px;">选择一个镜像以在下次 PXE 启动时启动。这是一次性操作,使用后清除。</p>
             <div class="form-group">
-                <label>Client</label>
+                <label>客户端</label>
                 <input type="text" id="next-boot-mac" readonly>
             </div>
             <div class="form-group">
-                <label>Boot Image</label>
+                <label>启动镜像</label>
                 <select id="next-boot-image-select">
                 </select>
             </div>
             <div id="next-boot-current" style="margin-bottom: 16px; display: none;">
-                <span style="color: var(--text-secondary);">Current next boot: </span>
+                <span style="color: var(--text-secondary);">当前下次启动: </span>
                 <span id="next-boot-current-image" class="badge badge-info"></span>
-                <button class="btn btn-sm btn-danger" onclick="clearNextBoot()" style="margin-left: 8px;">Clear</button>
+                <button class="btn btn-sm btn-danger" onclick="clearNextBoot()" style="margin-left: 8px;">清除</button>
             </div>
-            <button class="btn btn-primary" onclick="saveNextBoot()">Set Next Boot</button>
-            <button class="btn btn-success" onclick="saveNextBootAndWake()" style="margin-left: 8px;">Set & Wake</button>
-            <button type="button" class="btn" onclick="closeModal('next-boot-modal')">Cancel</button>
+            <button class="btn btn-primary" onclick="saveNextBoot()">设置下次启动</button>
+            <button class="btn btn-success" onclick="saveNextBootAndWake()" style="margin-left: 8px;">设置并唤醒</button>
+            <button type="button" class="btn" onclick="closeModal('next-boot-modal')">取消</button>
         </div>
     </div>
 
     <div id="add-custom-tool-modal" class="modal">
         <div class="modal-content" style="max-width: 560px;">
             <div class="modal-header">
-                <h2>Add Custom Tool</h2>
+                <h2>添加自定义工具</h2>
             </div>
             <form id="add-custom-tool-form">
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                     <div class="form-group">
-                        <label>Name (unique ID)</label>
-                        <input type="text" name="name" required placeholder="e.g. my-tool">
+                        <label>名称(唯一ID)</label>
+                        <input type="text" name="name" required placeholder="例如: my-tool">
                     </div>
                     <div class="form-group">
-                        <label>Display Name</label>
-                        <input type="text" name="display_name" required placeholder="e.g. My Tool">
+                        <label>显示名称</label>
+                        <input type="text" name="display_name" required placeholder="例如: 我的工具">
                     </div>
                 </div>
                 <div class="form-group">
-                    <label>Description</label>
-                    <input type="text" name="description" placeholder="Short description">
+                    <label>描述</label>
+                    <input type="text" name="description" placeholder="简短描述">
                 </div>
                 <div class="form-group">
-                    <label>Download URL</label>
+                    <label>下载URL</label>
                     <input type="url" name="download_url" required placeholder="https://example.com/tool.zip">
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                     <div class="form-group">
-                        <label>Boot Method</label>
+                        <label>启动方法</label>
                         <select name="boot_method">
-                            <option value="kernel">Kernel/Initrd</option>
-                            <option value="chain">Chain (EFI)</option>
-                            <option value="memdisk">Memdisk</option>
+                            <option value="kernel">内核/Initrd</option>
+                            <option value="chain">链式(EFI)</option>
+                            <option value="memdisk">内存盘</option>
                         </select>
                     </div>
                     <div class="form-group">
-                        <label>Archive Type</label>
+                        <label>归档类型</label>
                         <select name="archive_type">
-                            <option value="bin">Single Binary</option>
-                            <option value="zip">ZIP Archive</option>
-                            <option value="iso">ISO Image</option>
+                            <option value="bin">单个二进制文件</option>
+                            <option value="zip">ZIP压缩包</option>
+                            <option value="iso">ISO镜像</option>
                         </select>
                     </div>
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                     <div class="form-group">
-                        <label>Kernel/Binary Path</label>
-                        <input type="text" name="kernel_path" placeholder="e.g. vmlinuz or tool.efi">
-                        <small style="color: var(--text-secondary);">Path within extracted archive or filename for binary</small>
+                        <label>内核/二进制路径</label>
+                        <input type="text" name="kernel_path" placeholder="例如: vmlinuz 或 tool.efi">
+                        <small style="color: var(--text-secondary);">提取归档内的路径或二进制文件名</small>
                     </div>
                     <div class="form-group">
-                        <label>Initrd Path</label>
-                        <input type="text" name="initrd_path" placeholder="e.g. initrd.img (optional)">
+                        <label>Initrd路径</label>
+                        <input type="text" name="initrd_path" placeholder="例如: initrd.img(可选)">
                     </div>
                 </div>
                 <div class="form-group">
-                    <label>Boot Parameters</label>
-                    <input type="text" name="boot_params" placeholder="Optional kernel params. Use {{HTTP_URL}} for server URL.">
+                    <label>启动参数</label>
+                    <input type="text" name="boot_params" placeholder="可选内核参数。使用 {{HTTP_URL}} 表示服务器URL。">
                 </div>
                 <div class="form-group">
-                    <label>Version</label>
-                    <input type="text" name="version" placeholder="e.g. 1.0.0">
+                    <label>版本</label>
+                    <input type="text" name="version" placeholder="例如: 1.0.0">
                 </div>
-                <button type="submit" class="btn btn-primary">Create Tool</button>
-                <button type="button" class="btn" onclick="closeModal('add-custom-tool-modal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">创建工具</button>
+                <button type="button" class="btn" onclick="closeModal('add-custom-tool-modal')">取消</button>
             </form>
         </div>
     </div>
@@ -1226,63 +1226,63 @@
     <div id="add-profile-modal" class="modal">
         <div class="modal-content" style="max-width: 560px;">
             <div class="modal-header">
-                <h2>Add Custom Distro Profile</h2>
+                <h2>添加自定义发行版配置</h2>
             </div>
             <form id="add-profile-form">
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                     <div class="form-group">
-                        <label>Profile ID</label>
-                        <input type="text" name="profile_id" required placeholder="e.g. my-distro">
+                        <label>配置ID</label>
+                        <input type="text" name="profile_id" required placeholder="例如: my-distro">
                     </div>
                     <div class="form-group">
-                        <label>Display Name</label>
-                        <input type="text" name="display_name" required placeholder="e.g. My Distro">
+                        <label>显示名称</label>
+                        <input type="text" name="display_name" required placeholder="例如: 我的发行版">
                     </div>
                 </div>
                 <div class="form-group">
-                    <label>Family</label>
-                    <input type="text" name="family" placeholder="e.g. debian, arch, redhat">
+                    <label>系列</label>
+                    <input type="text" name="family" placeholder="例如: debian, arch, redhat">
                 </div>
                 <div class="form-group">
-                    <label>Filename Patterns (comma-separated)</label>
-                    <input type="text" name="filename_patterns" required placeholder="e.g. mydistro, my-distro">
-                    <small style="color: var(--text-muted);">Substrings to match in ISO filenames</small>
+                    <label>文件名模式(逗号分隔)</label>
+                    <input type="text" name="filename_patterns" required placeholder="例如: mydistro, my-distro">
+                    <small style="color: var(--text-muted);">ISO文件名中要匹配的子字符串</small>
                 </div>
                 <div class="form-group">
-                    <label>Kernel Paths (comma-separated)</label>
-                    <input type="text" name="kernel_paths" placeholder="e.g. /live/vmlinuz, /boot/vmlinuz">
-                    <small style="color: var(--text-muted);">Paths to try inside the ISO</small>
+                    <label>内核路径(逗号分隔)</label>
+                    <input type="text" name="kernel_paths" placeholder="例如: /live/vmlinuz, /boot/vmlinuz">
+                    <small style="color: var(--text-muted);">ISO内要尝试的路径</small>
                 </div>
                 <div class="form-group">
-                    <label>Initrd Paths (comma-separated)</label>
-                    <input type="text" name="initrd_paths" placeholder="e.g. /live/initrd.img, /boot/initrd">
+                    <label>Initrd路径(逗号分隔)</label>
+                    <input type="text" name="initrd_paths" placeholder="例如: /live/initrd.img, /boot/initrd">
                 </div>
                 <div class="form-group">
-                    <label>Squashfs Paths (comma-separated)</label>
-                    <input type="text" name="squashfs_paths" placeholder="e.g. /live/filesystem.squashfs">
+                    <label>Squashfs路径(逗号分隔)</label>
+                    <input type="text" name="squashfs_paths" placeholder="例如: /live/filesystem.squashfs">
                 </div>
                 <div class="form-group">
-                    <label>Default Boot Parameters</label>
-                    <input type="text" name="default_boot_params" placeholder="e.g. boot=live ip=dhcp">
-                    <small style="color: var(--text-muted);">Placeholders: <code>{{BASE_URL}}</code> <code>{{CACHE_DIR}}</code> <code>{{FILENAME}}</code> <code>{{SQUASHFS}}</code></small>
+                    <label>默认启动参数</label>
+                    <input type="text" name="default_boot_params" placeholder="例如: boot=live ip=dhcp">
+                    <small style="color: var(--text-muted);">占位符: <code>{{BASE_URL}}</code> <code>{{CACHE_DIR}}</code> <code>{{FILENAME}}</code> <code>{{SQUASHFS}}</code></small>
                 </div>
                 <div class="form-group">
-                    <label>Boot Params with Squashfs</label>
-                    <input type="text" name="boot_params_with_squashfs" placeholder="e.g. boot=live fetch={{SQUASHFS}}">
-                    <small style="color: var(--text-muted);">Used when squashfs is detected. Leave empty to use default params.</small>
+                    <label>带Squashfs的启动参数</label>
+                    <input type="text" name="boot_params_with_squashfs" placeholder="例如: boot=live fetch={{SQUASHFS}}">
+                    <small style="color: var(--text-muted);">检测到squashfs时使用。留空以使用默认参数。</small>
                 </div>
                 <div class="form-group">
-                    <label>Auto-Install Type</label>
+                    <label>自动安装类型</label>
                     <select name="auto_install_type">
-                        <option value="">None</option>
+                        <option value="">无</option>
                         <option value="preseed">Preseed (Debian)</option>
                         <option value="kickstart">Kickstart (RHEL)</option>
                         <option value="autoinstall">Autoinstall (Ubuntu)</option>
                         <option value="autounattend">Autounattend (Windows)</option>
                     </select>
                 </div>
-                <button type="submit" class="btn btn-primary">Create Profile</button>
-                <button type="button" class="btn" onclick="closeModal('add-profile-modal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">创建配置</button>
+                <button type="button" class="btn" onclick="closeModal('add-profile-modal')">取消</button>
             </form>
         </div>
     </div>
@@ -1292,56 +1292,56 @@
             <div style="margin-bottom: 20px;">
                 <div style="font-size: 48px; margin-bottom: 8px;">🚀</div>
                 <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 4px; padding: 0;">Bootimus</h2>
-                <p style="color: var(--text-secondary); font-size: 13px; margin: 0;">PXE/HTTP Boot Server</p>
+                <p style="color: var(--text-secondary); font-size: 13px; margin: 0;">PXE/HTTP 启动服务器</p>
                 <p id="about-version" style="color: var(--text-muted); font-size: 12px; margin: 6px 0 0;"></p>
             </div>
             <div style="text-align: left; font-size: 13px; color: var(--text-secondary); line-height: 1.8; border-top: 1px solid var(--border); padding-top: 16px;">
                 <p><strong style="color: var(--text-primary);">GitHub</strong><br>
                 <a href="https://github.com/garybowers/bootimus" target="_blank" style="color: var(--teal);">github.com/garybowers/bootimus</a></p>
-                <p style="margin-top: 12px;"><strong style="color: var(--text-primary);">Report Issues</strong><br>
+                <p style="margin-top: 12px;"><strong style="color: var(--text-primary);">报告问题</strong><br>
                 <a href="https://github.com/garybowers/bootimus/issues" target="_blank" style="color: var(--teal);">github.com/garybowers/bootimus/issues</a></p>
                 <p style="margin-top: 12px;"><strong style="color: var(--text-primary);">Docker Hub</strong><br>
                 <a href="https://hub.docker.com/r/garybowers/bootimus" target="_blank" style="color: var(--teal);">hub.docker.com/r/garybowers/bootimus</a></p>
-                <p style="margin-top: 12px;"><strong style="color: var(--text-primary);">Licence</strong><br>
+                <p style="margin-top: 12px;"><strong style="color: var(--text-primary);">许可证</strong><br>
                 Apache License 2.0</p>
             </div>
-            <button type="button" class="btn" onclick="closeModal('about-modal')" style="margin-top: 16px;">Close</button>
+            <button type="button" class="btn" onclick="closeModal('about-modal')" style="margin-top: 16px;">关闭</button>
         </div>
     </div>
 
     <div id="inventory-history-modal" class="modal">
         <div class="modal-content" style="max-width: 800px;">
             <div class="modal-header">
-                <h2>Hardware Inventory History</h2>
+                <h2>硬件清单历史</h2>
             </div>
             <div id="inventory-history-table"></div>
-            <button type="button" class="btn" onclick="closeModal('inventory-history-modal')" style="margin-top: 12px;">Close</button>
+            <button type="button" class="btn" onclick="closeModal('inventory-history-modal')" style="margin-top: 12px;">关闭</button>
         </div>
     </div>
 
     <div id="upload-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Upload ISO Image</h2>
+                <h2>上传 ISO 镜像</h2>
             </div>
             <form id="upload-form">
                 <div class="form-group">
                     <div class="upload-area" id="upload-area">
-                        <p>📁 Click to select or drag & drop ISO file</p>
+                        <p>📁 点击选择或拖放 ISO 文件</p>
                         <input type="file" name="file" accept=".iso" style="display:none;" id="file-input">
                         <p id="file-name" style="margin-top: 10px; color: var(--accent);"></p>
                     </div>
                 </div>
                 <div class="form-group">
-                    <label>Description</label>
-                    <textarea name="description" placeholder="Optional description" rows="3"></textarea>
+                    <label>描述</label>
+                    <textarea name="description" placeholder="可选描述" rows="3"></textarea>
                 </div>
                 <div class="form-group checkbox-group">
                     <input type="checkbox" name="public" checked>
-                    <label>Public (available to all clients)</label>
+                    <label>公共(对所有客户端可用)</label>
                 </div>
-                <button type="submit" class="btn btn-primary">Upload</button>
-                <button type="button" class="btn" onclick="closeModal('upload-modal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">上传</button>
+                <button type="button" class="btn" onclick="closeModal('upload-modal')">取消</button>
             </form>
         </div>
     </div>
@@ -1350,17 +1350,17 @@
     <div id="download-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Download ISO from URL</h2>
+                <h2>从URL下载 ISO</h2>
             </div>
             <form id="download-form">
                 <div class="form-group">
                     <label>ISO URL *</label>
                     <input type="url" name="url" placeholder="https://example.com/image.iso" required>
-                    <small style="color: var(--text-secondary);">Direct link to .iso file</small>
+                    <small style="color: var(--text-secondary);">.iso 文件的直接链接</small>
                 </div>
                 <div class="form-group">
-                    <label>Description</label>
-                    <textarea name="description" placeholder="Optional description" rows="3"></textarea>
+                    <label>描述</label>
+                    <textarea name="description" placeholder="可选描述" rows="3"></textarea>
                 </div>
                 <div id="download-progress-container" style="display: none; margin-top: 15px;">
                     <div class="progress-bar">
@@ -1368,8 +1368,8 @@
                     </div>
                     <div class="progress-text" id="download-progress-text">0% - 0 B/s</div>
                 </div>
-                <button type="submit" class="btn btn-primary" id="download-submit-btn">Start Download</button>
-                <button type="button" class="btn" onclick="closeModal('download-modal')">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="download-submit-btn">开始下载</button>
+                <button type="button" class="btn" onclick="closeModal('download-modal')">取消</button>
             </form>
         </div>
     </div>
@@ -1378,28 +1378,28 @@
     <div id="add-user-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Add User</h2>
+                <h2>添加用户</h2>
             </div>
             <form id="add-user-form">
                 <div class="form-group">
-                    <label>Username *</label>
-                    <input type="text" name="username" placeholder="Username" required>
+                    <label>用户名 *</label>
+                    <input type="text" name="username" placeholder="用户名" required>
                 </div>
                 <div class="form-group">
-                    <label>Password *</label>
-                    <input type="password" name="password" placeholder="Password" required minlength="8">
-                    <small style="color: var(--text-secondary);">Minimum 8 characters</small>
+                    <label>密码 *</label>
+                    <input type="password" name="password" placeholder="密码" required minlength="8">
+                    <small style="color: var(--text-secondary);">最少8个字符</small>
                 </div>
                 <div class="form-group checkbox-group">
                     <input type="checkbox" name="is_admin">
-                    <label>Administrator</label>
+                    <label>管理员</label>
                 </div>
                 <div class="form-group checkbox-group">
                     <input type="checkbox" name="enabled" checked>
-                    <label>Enabled</label>
+                    <label>已启用</label>
                 </div>
-                <button type="submit" class="btn btn-primary">Create User</button>
-                <button type="button" class="btn" onclick="closeModal('add-user-modal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">创建用户</button>
+                <button type="button" class="btn" onclick="closeModal('add-user-modal')">取消</button>
             </form>
         </div>
     </div>
@@ -1407,24 +1407,24 @@
     <div id="edit-user-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Edit User</h2>
+                <h2>编辑用户</h2>
             </div>
             <form id="edit-user-form">
                 <input type="hidden" name="id">
                 <div class="form-group">
-                    <label>Username</label>
+                    <label>用户名</label>
                     <input type="text" name="username" readonly>
                 </div>
                 <div class="form-group checkbox-group">
                     <input type="checkbox" name="is_admin">
-                    <label>Administrator</label>
+                    <label>管理员</label>
                 </div>
                 <div class="form-group checkbox-group">
                     <input type="checkbox" name="enabled">
-                    <label>Enabled</label>
+                    <label>已启用</label>
                 </div>
-                <button type="submit" class="btn btn-primary">Update User</button>
-                <button type="button" class="btn" onclick="closeModal('edit-user-modal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">更新用户</button>
+                <button type="button" class="btn" onclick="closeModal('edit-user-modal')">取消</button>
             </form>
         </div>
     </div>
@@ -1432,21 +1432,21 @@
     <div id="reset-password-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Reset Password</h2>
+                <h2>重置密码</h2>
             </div>
             <form id="reset-password-form">
                 <input type="hidden" name="username">
                 <div class="form-group">
-                    <label>Username</label>
+                    <label>用户名</label>
                     <input type="text" name="username_display" readonly>
                 </div>
                 <div class="form-group">
-                    <label>New Password *</label>
-                    <input type="password" name="password" placeholder="New password" required minlength="8">
-                    <small style="color: var(--text-secondary);">Minimum 8 characters</small>
+                    <label>新密码 *</label>
+                    <input type="password" name="password" placeholder="新密码" required minlength="8">
+                    <small style="color: var(--text-secondary);">最少8个字符</small>
                 </div>
-                <button type="submit" class="btn btn-primary">Reset Password</button>
-                <button type="button" class="btn" onclick="closeModal('reset-password-modal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">重置密码</button>
+                <button type="button" class="btn" onclick="closeModal('reset-password-modal')">取消</button>
             </form>
         </div>
     </div>
@@ -1455,38 +1455,38 @@
     <div id="autoinstall-modal" class="modal">
         <div class="modal-content" style="max-width: 900px;">
             <div class="modal-header">
-                <h2>Auto-Install Script for <span id="autoinstall-image-name"></span></h2>
+                <h2><span id="autoinstall-image-name"></span>的自动安装脚本</h2>
             </div>
             <form onsubmit="event.preventDefault(); saveAutoInstallScript();">
                 <input type="hidden" id="autoinstall-image-filename">
                 <div class="form-group">
                     <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                         <input type="checkbox" id="autoinstall-enabled" style="margin: 0; cursor: pointer;">
-                        <span>Enable Auto-Install</span>
+                        <span>启用自动安装</span>
                     </label>
                     <small style="color: var(--text-secondary); display: block; margin-top: 4px;">
-                        When enabled, boot parameters will be automatically injected to use this script
+                        启用后,启动参数将自动注入以使用此脚本
                     </small>
                 </div>
                 <div class="form-group">
-                    <label>Script Type</label>
+                    <label>脚本类型</label>
                     <select id="autoinstall-script-type" class="form-control">
                         <option value="preseed">Preseed (Debian/Ubuntu)</option>
                         <option value="kickstart">Kickstart (RHEL/CentOS/Fedora/Rocky)</option>
                         <option value="autoinstall">Autoinstall (Ubuntu cloud-init)</option>
                         <option value="autounattend">Autounattend (Windows)</option>
                     </select>
-                    <small style="color: var(--text-secondary);">Select the installation script format</small>
+                    <small style="color: var(--text-secondary);">选择安装脚本格式</small>
                 </div>
                 <div class="form-group">
-                    <label>Script Content</label>
-                    <textarea id="autoinstall-script" rows="20" style="font-family: monospace; width: 100%; padding: 8px; border: 1px solid var(--text-muted); border-radius: 4px; background: var(--bg-secondary); color: var(--text-primary);" placeholder="Enter your auto-install script content here..."></textarea>
+                    <label>脚本内容</label>
+                    <textarea id="autoinstall-script" rows="20" style="font-family: monospace; width: 100%; padding: 8px; border: 1px solid var(--text-muted); border-radius: 4px; background: var(--bg-secondary); color: var(--text-primary);" placeholder="在此输入您的自动安装脚本内容..."></textarea>
                     <small style="color: var(--text-secondary);">
-                        Script will be served at: http://server:port/autoinstall/&lt;filename&gt;
+                        脚本将在以下地址提供: http://server:port/autoinstall/&lt;filename&gt;
                     </small>
                 </div>
-                <button type="submit" class="btn btn-primary">Save Configuration</button>
-                <button type="button" class="btn" onclick="closeModal('autoinstall-modal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">保存配置</button>
+                <button type="button" class="btn" onclick="closeModal('autoinstall-modal')">取消</button>
             </form>
         </div>
     </div>
@@ -1496,22 +1496,22 @@
     <div id="upload-public-file-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Upload Public File</h2>
+                <h2>上传公共文件</h2>
             </div>
             <form id="upload-public-file-form" onsubmit="uploadPublicFile(event)">
                 <div class="form-group">
-                    <label>File *</label>
+                    <label>文件 *</label>
                     <input type="file" id="public-file-upload" class="form-control" required>
-                    <small style="color: var(--text-secondary);">Max file size: 100MB. This file will be available to all clients.</small>
+                    <small style="color: var(--text-secondary);">最大文件大小: 100MB。此文件将对所有客户端可用。</small>
                 </div>
 
                 <div class="form-group">
-                    <label>Description</label>
-                    <input type="text" id="public-file-description" class="form-control" placeholder="Brief description of this file">
+                    <label>描述</label>
+                    <input type="text" id="public-file-description" class="form-control" placeholder="此文件的简要描述">
                 </div>
 
-                <button type="submit" class="btn btn-primary">Upload File</button>
-                <button type="button" class="btn" onclick="closeModal('upload-public-file-modal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">上传文件</button>
+                <button type="button" class="btn" onclick="closeModal('upload-public-file-modal')">取消</button>
             </form>
         </div>
     </div>
@@ -1520,47 +1520,47 @@
     <div id="image-files-modal" class="modal">
         <div class="modal-content" style="max-width: 1000px;">
             <div class="modal-header">
-                <h2>Files for <span id="image-files-image-name"></span></h2>
+                <h2><span id="image-files-image-name"></span>的文件</h2>
             </div>
             <input type="hidden" id="image-files-image-id">
 
             <!-- Upload Form -->
             <div style="background: var(--bg-secondary); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-                <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 16px;">Upload New File</h3>
+                <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 16px;">上传新文件</h3>
                 <form id="upload-image-file-form" onsubmit="uploadImageFile(event)">
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
                         <div>
-                            <label style="display: block; margin-bottom: 5px; font-size: 14px;">File *</label>
+                            <label style="display: block; margin-bottom: 5px; font-size: 14px;">文件 *</label>
                             <input type="file" id="image-file-upload" class="form-control" required>
                         </div>
                         <div>
-                            <label style="display: block; margin-bottom: 5px; font-size: 14px;">Destination Path</label>
-                            <input type="text" id="image-file-destination" class="form-control" placeholder="e.g., /root/setup.sh">
-                            <small style="color: var(--text-secondary); font-size: 11px;">Where to save on installed system</small>
+                            <label style="display: block; margin-bottom: 5px; font-size: 14px;">目标路径</label>
+                            <input type="text" id="image-file-destination" class="form-control" placeholder="例如: /root/setup.sh">
+                            <small style="color: var(--text-secondary); font-size: 11px;">在已安装系统上的保存位置</small>
                         </div>
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
                         <div>
-                            <label style="display: block; margin-bottom: 5px; font-size: 14px;">Description</label>
-                            <input type="text" id="image-file-description" class="form-control" placeholder="Brief description">
+                            <label style="display: block; margin-bottom: 5px; font-size: 14px;">描述</label>
+                            <input type="text" id="image-file-description" class="form-control" placeholder="简要描述">
                         </div>
                         <div style="display: flex; align-items: center; padding-top: 20px;">
                             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                                 <input type="checkbox" id="image-file-autoinstall" checked style="margin: 0; cursor: pointer;">
-                                <span>Include in autoinstall</span>
+                                <span>包含在自动安装中</span>
                             </label>
                         </div>
                     </div>
-                    <button type="submit" class="btn btn-primary">Upload</button>
+                    <button type="submit" class="btn btn-primary">上传</button>
                 </form>
-                <small style="color: var(--text-secondary); display: block; margin-top: 8px;">Max file size: 100MB. Files will be automatically downloaded during OS installation.</small>
+                <small style="color: var(--text-secondary); display: block; margin-top: 8px;">最大文件大小: 100MB。文件将在操作系统安装期间自动下载。</small>
             </div>
 
             <!-- Files Table -->
             <div id="image-files-table"></div>
 
             <div style="margin-top: 20px;">
-                <button type="button" class="btn" onclick="closeModal('image-files-modal')">Close</button>
+                <button type="button" class="btn" onclick="closeModal('image-files-modal')">关闭</button>
             </div>
         </div>
     </div>
@@ -1569,41 +1569,41 @@
     <div id="edit-file-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Edit File</h2>
+                <h2>编辑文件</h2>
             </div>
             <form id="edit-file-form" onsubmit="updateFile(event)">
                 <input type="hidden" id="edit-file-id">
 
                 <div class="form-group">
-                    <label>Filename</label>
+                    <label>文件名</label>
                     <input type="text" id="edit-file-name" class="form-control" readonly style="background: var(--bg-primary);">
                 </div>
 
                 <div class="form-group">
-                    <label>Description</label>
-                    <input type="text" id="edit-file-description" class="form-control" placeholder="Brief description of this file">
+                    <label>描述</label>
+                    <input type="text" id="edit-file-description" class="form-control" placeholder="此文件的简要描述">
                 </div>
 
                 <div class="form-group">
-                    <label>Type</label>
+                    <label>类型</label>
                     <input type="text" id="edit-file-type" class="form-control" readonly style="background: var(--bg-primary);">
                 </div>
 
                 <div class="form-group">
-                    <label>Size</label>
+                    <label>大小</label>
                     <input type="text" id="edit-file-size" class="form-control" readonly style="background: var(--bg-primary);">
                 </div>
 
                 <div class="form-group">
-                    <label>Download URL</label>
+                    <label>下载URL</label>
                     <div style="padding: 10px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 4px;">
                         <code id="edit-file-url" style="color: var(--text-secondary); word-break: break-all;"></code>
-                        <button type="button" class="btn btn-sm" onclick="copyFileURL()" style="margin-left: 10px;">Copy</button>
+                        <button type="button" class="btn btn-sm" onclick="copyFileURL()" style="margin-left: 10px;">复制</button>
                     </div>
                 </div>
 
-                <button type="submit" class="btn btn-primary">Save Changes</button>
-                <button type="button" class="btn" onclick="closeModal('edit-file-modal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">保存更改</button>
+                <button type="button" class="btn" onclick="closeModal('edit-file-modal')">取消</button>
             </form>
         </div>
     </div>
@@ -1612,73 +1612,73 @@
     <div id="image-properties-modal" class="modal slide-panel">
         <div class="modal-content" style="max-width: 1000px;">
             <div class="modal-header">
-                <h2>Image Properties: <span id="image-props-name"></span></h2>
+                <h2>镜像属性: <span id="image-props-name"></span></h2>
             </div>
             <input type="hidden" id="image-props-filename">
 
             <div class="tabs" style="margin-bottom: 20px;">
-                <button class="tab active" data-tab="props-general" onclick="switchPropsTab('props-general')">General</button>
-                <button class="tab" data-tab="props-autoinstall" onclick="switchPropsTab('props-autoinstall')">Auto-Install</button>
-                <button class="tab" data-tab="props-files" onclick="switchPropsTab('props-files')">File Browser</button>
+                <button class="tab active" data-tab="props-general" onclick="switchPropsTab('props-general')">常规</button>
+                <button class="tab" data-tab="props-autoinstall" onclick="switchPropsTab('props-autoinstall')">自动安装</button>
+                <button class="tab" data-tab="props-files" onclick="switchPropsTab('props-files')">文件浏览器</button>
             </div>
 
             <div id="props-general-content" class="props-tab-content">
                 <div class="form-group">
-                    <label>Display Name</label>
+                    <label>显示名称</label>
                     <input type="text" id="image-props-display-name" class="form-control">
                 </div>
 
                 <div class="form-group">
-                    <label>Description</label>
+                    <label>描述</label>
                     <textarea id="image-props-description" class="form-control" rows="3"></textarea>
                 </div>
 
                 <div class="form-group">
-                    <label>Group Assignment</label>
+                    <label>组分配</label>
                     <select id="image-props-group" class="form-control">
-                        <option value="">Unassigned</option>
+                        <option value="">未分配</option>
                     </select>
                 </div>
 
                 <div class="form-group">
-                    <label>Order</label>
+                    <label>顺序</label>
                     <input type="number" id="image-props-order" class="form-control" min="0" value="0">
                 </div>
 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                     <div class="form-group">
-                        <label>Boot Method</label>
+                        <label>启动方法</label>
                         <select id="image-props-boot-method" class="form-control">
-                            <option value="sanboot">SAN Boot</option>
-                            <option value="kernel">Kernel/Initrd</option>
-                            <option value="nbd">NBD Mount</option>
+                            <option value="sanboot">SAN 启动</option>
+                            <option value="kernel">内核/Initrd</option>
+                            <option value="nbd">NBD 挂载</option>
                         </select>
                     </div>
                     <div class="form-group">
-                        <label>Distro Profile</label>
+                        <label>发行版配置</label>
                         <select id="image-props-distro" class="form-control">
-                            <option value="">Auto-detect</option>
+                            <option value="">自动检测</option>
                         </select>
                     </div>
                 </div>
 
                 <div class="form-group">
-                    <label>Boot Parameters</label>
+                    <label>启动参数</label>
                     <div style="display: flex; gap: 8px;">
-                        <input type="text" id="image-props-boot-params" class="form-control" placeholder="Optional kernel parameters" style="flex: 1;">
-                        <button type="button" class="btn btn-sm" id="image-props-redetect-btn" onclick="redetectFromProperties()" style="white-space: nowrap; display: none;">Re-detect</button>
+                        <input type="text" id="image-props-boot-params" class="form-control" placeholder="可选内核参数" style="flex: 1;">
+                        <button type="button" class="btn btn-sm" id="image-props-redetect-btn" onclick="redetectFromProperties()" style="white-space: nowrap; display: none;">重新检测</button>
                     </div>
-                    <small style="color: var(--text-muted);">Leave empty for distro defaults. Placeholders: <code>{{BASE_URL}}</code> <code>{{CACHE_DIR}}</code> <code>{{FILENAME}}</code> <code>{{SQUASHFS}}</code></small>
+                    <small style="color: var(--text-muted);">留空以使用发行版默认值。占位符: <code>{{BASE_URL}}</code> <code>{{CACHE_DIR}}</code> <code>{{FILENAME}}</code> <code>{{SQUASHFS}}</code></small>
                 </div>
 
                 <div class="form-group checkbox-group">
                     <input type="checkbox" id="image-props-enabled">
-                    <label>Enabled</label>
+                    <label>已启用</label>
                 </div>
 
                 <div class="form-group checkbox-group">
                     <input type="checkbox" id="image-props-public">
-                    <label>Public (available to all clients)</label>
+                    <label>公共(对所有客户端可用)</label>
                 </div>
             </div>
 
@@ -1686,32 +1686,32 @@
                 <div class="form-group">
                     <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                         <input type="checkbox" id="image-props-autoinstall-enabled" style="margin: 0; cursor: pointer;">
-                        <span>Enable Auto-Install</span>
+                        <span>启用自动安装</span>
                     </label>
                     <small style="color: var(--text-secondary); display: block; margin-top: 4px;">
-                        When enabled, boot parameters will be automatically injected to use this script
+                        启用后,启动参数将自动注入以使用此脚本
                     </small>
                 </div>
 
                 <div class="form-group">
-                    <label>Script Type</label>
+                    <label>脚本类型</label>
                     <select id="image-props-autoinstall-type" class="form-control">
                         <option value="preseed">Preseed (Debian/Ubuntu)</option>
                         <option value="kickstart">Kickstart (RHEL/CentOS/Fedora/Rocky)</option>
                         <option value="autoinstall">Autoinstall (Ubuntu cloud-init)</option>
                         <option value="autounattend">Autounattend (Windows)</option>
                     </select>
-                    <small style="color: var(--text-secondary);">Select the installation script format</small>
+                    <small style="color: var(--text-secondary);">选择安装脚本格式</small>
                 </div>
 
                 <div class="form-group">
-                    <label>Auto-Install Script</label>
-                    <textarea id="image-props-autoinstall-script" rows="20" style="font-family: monospace; width: 100%; padding: 8px; border: 1px solid var(--text-muted); border-radius: 4px; background: var(--bg-secondary); color: var(--text-primary);" placeholder="Enter your auto-install script content here..."></textarea>
+                    <label>自动安装脚本</label>
+                    <textarea id="image-props-autoinstall-script" rows="20" style="font-family: monospace; width: 100%; padding: 8px; border: 1px solid var(--text-muted); border-radius: 4px; background: var(--bg-secondary); color: var(--text-primary);" placeholder="在此输入您的自动安装脚本内容..."></textarea>
                     <small style="color: var(--text-secondary); display: block; margin-top: 4px;">
-                        Served at: http://server:port/autoinstall/<span id="image-props-autoinstall-url"></span>
+                        服务地址: http://server:port/autoinstall/<span id="image-props-autoinstall-url"></span>
                     </small>
                     <small style="color: var(--text-secondary); display: block; margin-top: 4px;">
-                        Placeholders (replaced per-client at serve time):
+                        占位符(在服务时按客户端替换):
                         <code>{{MAC}}</code>
                         <code>{{HOSTNAME}}</code>
                         <code>{{CLIENT_NAME}}</code>
@@ -1726,34 +1726,34 @@
             <div id="props-files-content" class="props-tab-content" style="display: none;">
                 <!-- File Upload Section -->
                 <div style="background: var(--bg-tertiary); padding: 15px; border-radius: var(--radius-sm); margin-bottom: 15px;">
-                    <h3 style="margin: 0 0 10px 0; font-size: 16px; color: var(--accent);">Upload File</h3>
+                    <h3 style="margin: 0 0 10px 0; font-size: 16px; color: var(--accent);">上传文件</h3>
                     <form id="props-file-upload-form" onsubmit="event.preventDefault(); uploadPropsImageFile();">
                         <div class="form-group" style="margin: 0 0 10px 0;">
-                            <label style="font-size: 13px;">File</label>
+                            <label style="font-size: 13px;">文件</label>
                             <input type="file" id="props-file-input" class="form-control" required style="padding: 6px;">
                         </div>
-                        <button type="submit" class="btn btn-primary btn-sm">Upload</button>
+                        <button type="submit" class="btn btn-primary btn-sm">上传</button>
                     </form>
-                    <small style="color: var(--text-secondary); display: block; margin-top: 8px;">Max file size: 500MB. Files will be uploaded to the autoinstall folder.</small>
+                    <small style="color: var(--text-secondary); display: block; margin-top: 8px;">最大文件大小: 500MB。文件将上传到自动安装文件夹。</small>
                 </div>
 
                 <!-- File Browser -->
                 <div id="image-props-files-list" style="max-height: 600px; overflow-y: auto; margin-right: -8px; padding-right: 16px;">
                     <div class="loading">
                         <div class="spinner"></div>
-                        Loading files...
+                        加载文件...
                     </div>
                 </div>
             </div>
 
             <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border); display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                <button id="image-props-extract-btn" class="btn btn-success" style="display: none;" onclick="extractFromProperties()">Extract</button>
-                <button id="image-props-netboot-btn" class="btn btn-warning" style="display: none;" onclick="downloadNetbootFromProperties()">⬇ Netboot</button>
-                <button id="image-props-download-btn" class="btn" onclick="downloadISOFromProperties()">⬇ Download ISO</button>
-                <button id="image-props-delete-btn" class="btn btn-danger" onclick="deleteFromProperties()">Delete</button>
+                <button id="image-props-extract-btn" class="btn btn-success" style="display: none;" onclick="extractFromProperties()">提取</button>
+                <button id="image-props-netboot-btn" class="btn btn-warning" style="display: none;" onclick="downloadNetbootFromProperties()">⬇ 网络启动</button>
+                <button id="image-props-download-btn" class="btn" onclick="downloadISOFromProperties()">⬇ 下载ISO</button>
+                <button id="image-props-delete-btn" class="btn btn-danger" onclick="deleteFromProperties()">删除</button>
                 <div style="flex: 1;"></div>
-                <button class="btn" onclick="closeModal('image-properties-modal')">Cancel</button>
-                <button class="btn btn-primary" onclick="saveImageProperties()">Save Properties</button>
+                <button class="btn" onclick="closeModal('image-properties-modal')">取消</button>
+                <button class="btn btn-primary" onclick="saveImageProperties()">保存属性</button>
             </div>
         </div>
     </div>
@@ -1762,33 +1762,33 @@
     <div id="add-group-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Add Group</h2>
+                <h2>添加组</h2>
             </div>
             <form id="add-group-form">
                 <div class="form-group">
-                    <label>Group Name *</label>
-                    <input type="text" name="name" placeholder="Linux Distributions" required>
+                    <label>组名称 *</label>
+                    <input type="text" name="name" placeholder="Linux发行版" required>
                 </div>
                 <div class="form-group">
-                    <label>Description</label>
-                    <textarea name="description" placeholder="Optional description" rows="3"></textarea>
+                    <label>描述</label>
+                    <textarea name="description" placeholder="可选描述" rows="3"></textarea>
                 </div>
                 <div class="form-group">
-                    <label>Parent Group</label>
+                    <label>父组</label>
                     <select name="parent_id" id="add-group-parent-select">
-                        <option value="">None (Root Level)</option>
+                        <option value="">无(根级别)</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>Order</label>
+                    <label>顺序</label>
                     <input type="number" name="order" value="0" min="0">
                 </div>
                 <div class="form-group checkbox-group">
                     <input type="checkbox" name="enabled" checked>
-                    <label>Enabled</label>
+                    <label>已启用</label>
                 </div>
-                <button type="submit" class="btn btn-primary">Create Group</button>
-                <button type="button" class="btn" onclick="closeModal('add-group-modal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">创建组</button>
+                <button type="button" class="btn" onclick="closeModal('add-group-modal')">取消</button>
             </form>
         </div>
     </div>
@@ -1796,37 +1796,37 @@
     <div id="edit-group-modal" class="modal slide-panel">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Edit Group</h2>
+                <h2>编辑组</h2>
             </div>
             <form id="edit-group-form">
                 <input type="hidden" name="id">
                 <div class="form-group">
-                    <label>Group Name *</label>
+                    <label>组名称 *</label>
                     <input type="text" name="name" required>
                 </div>
                 <div class="form-group">
-                    <label>Description</label>
+                    <label>描述</label>
                     <textarea name="description" rows="3"></textarea>
                 </div>
                 <div class="form-group">
-                    <label>Parent Group</label>
+                    <label>父组</label>
                     <select name="parent_id" id="edit-group-parent-select">
-                        <option value="">None (Root Level)</option>
+                        <option value="">无(根级别)</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>Order</label>
+                    <label>顺序</label>
                     <input type="number" name="order" min="0">
                 </div>
                 <div class="form-group checkbox-group">
                     <input type="checkbox" name="enabled">
-                    <label>Enabled</label>
+                    <label>已启用</label>
                 </div>
                 <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border); display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                    <button type="button" class="btn btn-danger" onclick="deleteFromEditGroup()">Delete</button>
+                    <button type="button" class="btn btn-danger" onclick="deleteFromEditGroup()">删除</button>
                     <div style="flex: 1;"></div>
-                    <button type="button" class="btn" onclick="closeModal('edit-group-modal')">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Update Group</button>
+                    <button type="button" class="btn" onclick="closeModal('edit-group-modal')">取消</button>
+                    <button type="submit" class="btn btn-primary">更新组</button>
                 </div>
             </form>
         </div>
@@ -1835,22 +1835,22 @@
     <!-- Import Clients CSV Modal -->
     <div id="import-clients-modal" class="modal">
         <div class="modal-content">
-            <div class="modal-header"><h2>Import Clients from CSV</h2></div>
+            <div class="modal-header"><h2>从CSV导入客户端</h2></div>
             <p style="color: var(--text-secondary); font-size: 13px; margin: 0 0 12px 0;">
-                CSV columns: <code>mac_address</code> (required), <code>name</code>, <code>description</code>,
+                CSV列: <code>mac_address</code>(必需), <code>name</code>, <code>description</code>,
                 <code>enabled</code>, <code>show_public_images</code>, <code>static</code>,
                 <code>bootloader_set</code>, <code>client_group</code>, <code>allowed_images</code>
-                (pipe-separated), <code>next_boot_image</code>. A header row is expected.
-                Existing clients (matched by MAC) are updated; unknown MACs are created.
+                (竖线分隔), <code>next_boot_image</code>。期望有标题行。
+                现有客户端(按MAC匹配)将被更新;未知MAC将被创建。
             </p>
             <form id="import-clients-form" onsubmit="event.preventDefault(); importClientsCSV();">
                 <div class="form-group">
-                    <label>CSV File</label>
+                    <label>CSV文件</label>
                     <input type="file" id="import-clients-file" accept=".csv,text/csv" required>
                 </div>
                 <div id="import-clients-result" style="display: none; margin-bottom: 12px; padding: 10px; border-radius: var(--radius-sm); background: var(--bg-tertiary); font-size: 13px;"></div>
-                <button type="submit" class="btn btn-primary">Import</button>
-                <button type="button" class="btn" onclick="closeModal('import-clients-modal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">导入</button>
+                <button type="button" class="btn" onclick="closeModal('import-clients-modal')">取消</button>
             </form>
         </div>
     </div>
@@ -1858,22 +1858,22 @@
     <!-- Add Client Group Modal -->
     <div id="add-client-group-modal" class="modal">
         <div class="modal-content">
-            <div class="modal-header"><h2>Add Client Group</h2></div>
+            <div class="modal-header"><h2>添加客户端组</h2></div>
             <form id="add-client-group-form">
                 <div class="form-group">
-                    <label>Name *</label>
-                    <input type="text" name="name" required placeholder="e.g. lab1-workstations">
+                    <label>名称 *</label>
+                    <input type="text" name="name" required placeholder="例如: lab1-workstations">
                 </div>
                 <div class="form-group">
-                    <label>Description</label>
+                    <label>描述</label>
                     <textarea name="description" rows="2"></textarea>
                 </div>
                 <div class="form-group checkbox-group">
                     <input type="checkbox" name="enabled" checked>
-                    <label>Enabled</label>
+                    <label>已启用</label>
                 </div>
-                <button type="submit" class="btn btn-primary">Create Group</button>
-                <button type="button" class="btn" onclick="closeModal('add-client-group-modal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">创建组</button>
+                <button type="button" class="btn" onclick="closeModal('add-client-group-modal')">取消</button>
             </form>
         </div>
     </div>
@@ -1882,73 +1882,73 @@
     <div id="edit-client-group-modal" class="modal slide-panel">
         <div class="modal-content" style="max-width: 640px;">
             <div class="modal-header">
-                <h2>Client Group: <span id="cg-props-name"></span></h2>
+                <h2>客户端组: <span id="cg-props-name"></span></h2>
             </div>
             <form id="edit-client-group-form">
                 <input type="hidden" name="id">
                 <div class="form-group">
-                    <label>Name *</label>
+                    <label>名称 *</label>
                     <input type="text" name="name" required>
                 </div>
                 <div class="form-group">
-                    <label>Description</label>
+                    <label>描述</label>
                     <textarea name="description" rows="2"></textarea>
                 </div>
                 <div class="form-group checkbox-group">
                     <input type="checkbox" name="enabled">
-                    <label>Enabled</label>
+                    <label>已启用</label>
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                     <div class="form-group">
-                        <label>WOL Broadcast Override</label>
-                        <input type="text" name="wol_broadcast_addr" placeholder="e.g. 192.168.1.255">
-                        <small style="color: var(--text-muted);">Blank = use server default.</small>
+                        <label>WOL广播覆盖</label>
+                        <input type="text" name="wol_broadcast_addr" placeholder="例如: 192.168.1.255">
+                        <small style="color: var(--text-muted);">留空 = 使用服务器默认值。</small>
                     </div>
                     <div class="form-group">
-                        <label>Stagger Delay (ms)</label>
+                        <label>交错延迟(毫秒)</label>
                         <input type="number" name="stagger_delay_millis" min="0" value="0">
-                        <small style="color: var(--text-muted);">Delay between each WOL/next-boot action to avoid broadcast storms.</small>
+                        <small style="color: var(--text-muted);">每个WOL/下次启动操作之间的延迟,以避免广播风暴。</small>
                     </div>
                 </div>
                 <div class="form-group">
-                    <label>Bootloader Set Override</label>
+                    <label>引导加载程序集覆盖</label>
                     <select name="bootloader_set" id="cg-bootloader-select">
-                        <option value="">Default (global setting)</option>
+                        <option value="">默认(全局设置)</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>Overlay Allowed Images</label>
+                    <label>叠加允许的镜像</label>
                     <select name="allowed_images" id="cg-allowed-images" multiple size="8"></select>
-                    <small style="color: var(--text-secondary);">Members inherit these on top of their own allowlist.</small>
+                    <small style="color: var(--text-secondary);">成员在其自己的允许列表之上继承这些。</small>
                 </div>
                 <div class="form-group">
-                    <label>Members</label>
+                    <label>成员</label>
                     <select id="cg-members" multiple size="8"></select>
-                    <small style="color: var(--text-secondary);">Hold Ctrl/Cmd to select multiple. Clients can belong to only one group.</small>
+                    <small style="color: var(--text-secondary);">按住Ctrl/Cmd选择多个。客户端只能属于一个组。</small>
                 </div>
 
                 <details style="margin-bottom: 12px;">
-                    <summary style="cursor: pointer; font-weight: 500; padding: 6px 0;">BMC / Redfish Defaults</summary>
+                    <summary style="cursor: pointer; font-weight: 500; padding: 6px 0;">BMC / Redfish默认值</summary>
                     <p style="color: var(--text-muted); font-size: 12px; margin: 4px 0 10px 0;">
-                        Shared credentials for group members. Individual clients can override. Host is per-client only.
+                        组成员的共享凭据。单个客户端可以覆盖。主机仅针对每个客户端。
                     </p>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                         <div class="form-group">
-                            <label>Port</label>
+                            <label>端口</label>
                             <input type="number" name="ipmi_port" min="1" max="65535" placeholder="443">
                         </div>
                         <div class="form-group checkbox-group" style="align-self: end; padding: 6px 0;">
                             <input type="checkbox" name="ipmi_insecure" id="cg-ipmi-insecure">
-                            <label for="cg-ipmi-insecure">Skip TLS verify</label>
+                            <label for="cg-ipmi-insecure">跳过TLS验证</label>
                         </div>
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                         <div class="form-group">
-                            <label>Username</label>
+                            <label>用户名</label>
                             <input type="text" name="ipmi_username" autocomplete="off">
                         </div>
                         <div class="form-group">
-                            <label>Password</label>
+                            <label>密码</label>
                             <input type="password" name="ipmi_password" autocomplete="off">
                         </div>
                     </div>
@@ -1956,80 +1956,80 @@
 
                 <!-- Bulk actions panel -->
                 <div style="background: var(--bg-tertiary); padding: 16px; border-radius: var(--radius-sm); margin-bottom: 15px;">
-                    <h3 style="margin: 0 0 10px 0; font-size: 15px; color: var(--accent);">Bulk Actions</h3>
+                    <h3 style="margin: 0 0 10px 0; font-size: 15px; color: var(--accent);">批量操作</h3>
                     <p style="color: var(--text-secondary); font-size: 12px; margin: 0 0 12px 0;">
-                        Run against all enabled members. Save any pending changes to membership first.
+                        对所有已启用成员执行。请先保存任何待处理的成员资格更改。
                     </p>
                     <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px;">
-                        <button type="button" class="btn btn-success btn-sm" onclick="bulkWakeClientGroup()">Wake All (WOL)</button>
-                        <button type="button" class="btn btn-primary btn-sm" onclick="bulkClearNextBootClientGroup()">Clear Next Boot on All</button>
+                        <button type="button" class="btn btn-success btn-sm" onclick="bulkWakeClientGroup()">全部唤醒(WOL)</button>
+                        <button type="button" class="btn btn-primary btn-sm" onclick="bulkClearNextBootClientGroup()">清除所有下次启动</button>
                     </div>
                     <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 10px;">
                         <select id="cg-bulk-nextboot-image" style="flex: 1;"></select>
-                        <button type="button" class="btn btn-primary btn-sm" onclick="bulkSetNextBootClientGroup()">Set Next Boot on All</button>
+                        <button type="button" class="btn btn-primary btn-sm" onclick="bulkSetNextBootClientGroup()">为所有设置下次启动</button>
                     </div>
                     <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--border);">
                         <span style="font-size: 12px; color: var(--text-secondary); align-self: center;">BMC:</span>
-                        <button type="button" class="btn btn-success btn-sm" onclick="bulkPowerClientGroup('On')">Power On All</button>
-                        <button type="button" class="btn btn-danger btn-sm" onclick="bulkPowerClientGroup('ForceOff')">Force Off All</button>
-                        <button type="button" class="btn btn-sm" onclick="bulkPowerClientGroup('ForceRestart')">Restart All</button>
+                        <button type="button" class="btn btn-success btn-sm" onclick="bulkPowerClientGroup('On')">全部开机</button>
+                        <button type="button" class="btn btn-danger btn-sm" onclick="bulkPowerClientGroup('ForceOff')">全部强制关机</button>
+                        <button type="button" class="btn btn-sm" onclick="bulkPowerClientGroup('ForceRestart')">全部重启</button>
                     </div>
                 </div>
 
                 <div style="background: var(--bg-tertiary); padding: 16px; border-radius: var(--radius-sm); margin-bottom: 15px;">
-                    <h3 style="margin: 0 0 8px 0; font-size: 15px; color: var(--accent);">Scheduled Tasks</h3>
+                    <h3 style="margin: 0 0 8px 0; font-size: 15px; color: var(--accent);">计划任务</h3>
                     <p style="color: var(--text-secondary); font-size: 12px; margin: 0 0 10px 0;">
-                        Recurring bulk actions against this group. All times are server-local.
+                        对此组的定期批量操作。所有时间均为服务器本地时间。
                     </p>
                     <div id="cg-schedules-list" style="margin-bottom: 10px; font-size: 13px;"></div>
                     <details>
-                        <summary style="cursor: pointer; font-size: 13px; color: var(--accent);">+ Add schedule</summary>
+                        <summary style="cursor: pointer; font-size: 13px; color: var(--accent);">+ 添加计划</summary>
                         <div style="margin-top: 10px;">
                             <div class="form-group">
-                                <label>Name</label>
-                                <input type="text" id="cg-sched-name" placeholder="e.g. weekday-morning-wake">
+                                <label>名称</label>
+                                <input type="text" id="cg-sched-name" placeholder="例如: weekday-morning-wake">
                             </div>
                             <div class="form-group">
-                                <label>Preset</label>
+                                <label>预设</label>
                                 <select id="cg-sched-preset" onchange="applySchedulePreset()">
-                                    <option value="">(custom)</option>
-                                    <option value="0 8 * * 1-5">Weekdays at 08:00</option>
-                                    <option value="0 18 * * 1-5">Weekdays at 18:00</option>
-                                    <option value="0 * * * *">Every hour</option>
-                                    <option value="*/15 * * * *">Every 15 minutes</option>
-                                    <option value="0 3 * * *">Daily at 03:00</option>
-                                    <option value="0 0 * * 0">Weekly, Sunday midnight</option>
+                                    <option value="">(自定义)</option>
+                                    <option value="0 8 * * 1-5">工作日08:00</option>
+                                    <option value="0 18 * * 1-5">工作日18:00</option>
+                                    <option value="0 * * * *">每小时</option>
+                                    <option value="*/15 * * * *">每15分钟</option>
+                                    <option value="0 3 * * *">每天03:00</option>
+                                    <option value="0 0 * * 0">每周日午夜</option>
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label>Cron Expression</label>
+                                <label>Cron表达式</label>
                                 <input type="text" id="cg-sched-cron" placeholder="0 8 * * 1-5">
-                                <small style="color: var(--text-muted);"><code>min hour dom mon dow</code> — 5 fields</small>
+                                <small style="color: var(--text-muted);"><code>分 时 日 月 周</code> — 5个字段</small>
                             </div>
                             <div class="form-group">
-                                <label>Action</label>
+                                <label>操作</label>
                                 <select id="cg-sched-action" onchange="updateScheduleActionHint()">
-                                    <option value="wake">Wake All (WOL)</option>
-                                    <option value="power">Power (Redfish)</option>
-                                    <option value="next-boot">Set Next Boot Image</option>
-                                    <option value="next-boot-clear">Clear Next Boot</option>
+                                    <option value="wake">全部唤醒(WOL)</option>
+                                    <option value="power">电源(Redfish)</option>
+                                    <option value="next-boot">设置下次启动镜像</option>
+                                    <option value="next-boot-clear">清除下次启动</option>
                                 </select>
                             </div>
                             <div class="form-group" id="cg-sched-param-wrap">
-                                <label id="cg-sched-param-label">Parameter</label>
+                                <label id="cg-sched-param-label">参数</label>
                                 <input type="text" id="cg-sched-param" placeholder="">
                                 <small id="cg-sched-param-hint" style="color: var(--text-muted);"></small>
                             </div>
-                            <button type="button" class="btn btn-primary btn-sm" onclick="saveNewSchedule()">Create Schedule</button>
+                            <button type="button" class="btn btn-primary btn-sm" onclick="saveNewSchedule()">创建计划</button>
                         </div>
                     </details>
                 </div>
 
                 <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border); display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                    <button type="button" class="btn btn-danger" onclick="deleteFromEditClientGroup()">Delete</button>
+                    <button type="button" class="btn btn-danger" onclick="deleteFromEditClientGroup()">删除</button>
                     <div style="flex: 1;"></div>
-                    <button type="button" class="btn" onclick="closeModal('edit-client-group-modal')">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Group</button>
+                    <button type="button" class="btn" onclick="closeModal('edit-client-group-modal')">取消</button>
+                    <button type="submit" class="btn btn-primary">保存组</button>
                 </div>
             </form>
         </div>
